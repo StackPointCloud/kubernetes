@@ -351,6 +351,9 @@ type VolumeSource struct {
 	// StorageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
 	// +optional
 	StorageOS *StorageOSVolumeSource `json:"storageos,omitempty" protobuf:"bytes,27,opt,name=storageos"`
+	// StorageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+	// +optional
+	DOVolume *DOVolumeSource `json:"doVolume,omitempty" protobuf:"bytes,28,opt,name=doVolume"`
 }
 
 // PersistentVolumeClaimVolumeSource references the user's PVC in the same namespace.
@@ -1289,6 +1292,12 @@ type StorageOSPersistentVolumeSource struct {
 	// credentials.  If not specified, default values will be attempted.
 	// +optional
 	SecretRef *ObjectReference `json:"secretRef,omitempty" protobuf:"bytes,5,opt,name=secretRef"`
+}
+
+// Represents a Volume resource in Digital Ocean.
+type DOVolumeSource struct {
+	// Unique ID for the volume resource at Digital Ocean.
+	VolumeID string `json:"volumeID" protobuf:"bytes,1,opt,name=volumeID"`
 }
 
 // Adapts a ConfigMap into a volume.
