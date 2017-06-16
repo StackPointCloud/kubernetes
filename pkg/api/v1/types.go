@@ -351,7 +351,7 @@ type VolumeSource struct {
 	// StorageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
 	// +optional
 	StorageOS *StorageOSVolumeSource `json:"storageos,omitempty" protobuf:"bytes,27,opt,name=storageos"`
-	// StorageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+	// DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.
 	// +optional
 	DOVolume *DOVolumeSource `json:"doVolume,omitempty" protobuf:"bytes,28,opt,name=doVolume"`
 }
@@ -452,6 +452,9 @@ type PersistentVolumeSource struct {
 	// More info: https://releases.k8s.io/HEAD/examples/volumes/storageos/README.md
 	// +optional
 	StorageOS *StorageOSPersistentVolumeSource `json:"storageos,omitempty" protobuf:"bytes,21,opt,name=storageos"`
+	// DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.
+	// +optional
+	DOVolume *DOVolumeSource `json:"doVolume,omitempty" protobuf:"bytes,22,opt,name=doVolume"`
 }
 
 const (

@@ -48,7 +48,7 @@ func (plugin *doVolumePlugin) GetPluginName() string {
 
 // GetVolumeName returns the ID to uniquely identifying the volume spec.
 func (plugin *doVolumePlugin) GetVolumeName(spec *volume.Spec) (string, error) {
-	volumeSource, _, err := getVolumeSource(spec)
+	volumeSource, err := getVolumeSource(spec)
 	if err != nil {
 		return "", err
 	}
@@ -56,17 +56,50 @@ func (plugin *doVolumePlugin) GetVolumeName(spec *volume.Spec) (string, error) {
 	return volumeSource.VolumeID, nil
 }
 
-//
-// 	// CanSupport tests whether the plugin supports a given volume
-// 	// specification from the API.  The spec pointer should be considered
-// 	// const.
-// 	CanSupport(spec *Spec) bool
-//
-// 	// RequiresRemount returns true if this plugin requires mount calls to be
-// 	// reexecuted. Atomically updating volumes, like Downward API, depend on
-// 	// this to update the contents of the volume.
-// 	RequiresRemount() bool
-//
+// CanSupport returns a boolen that indicates if the volume is supported
+func (plugin *doVolumePlugin) CanSupport(spec *volume.Spec) bool {
+	return (spec.PersistentVolume != nil && spec.PersistentVolume.Spec.DOVolume != nil) ||
+		(spec.Volume != nil && spec.PersistentVolume.Spec.DOVolume != nil)
+}
+
+// RequiresRemount returns false if this plugin desn't need re-mount
+func (plugin *doVolumePlugin) RequiresRemount() bool {
+	return false
+}
+
+// SupportsMountOption returns false if volume plugin don't supports Mount options
+func (plugin *doVolumePlugin) SupportsMountOption() bool {
+	return false
+}
+
+// SupportsBulkVolumeVerification checks if volume plugin allows bulk volume verification
+func (plugin *doVolumePlugin) SupportsBulkVolumeVerification() bool {
+	return false
+}
+
+// 	// ConstructVolumeSpec constructs a volume spec based on the given volume name
+// 	// and mountPath. The spec may have incomplete information due to limited
+// 	// information from input. This function is used by volume manager to reconstruct
+// 	// volume spec by reading the volume directories from disk
+// 	ConstructVolumeSpec(volumeName, mountPath string) (*Spec, error)
+func (plugin *doVolumePlugin) ConstructVolumeSpec(volName, mountPath string) (*volume.Spec, error) {
+	mounter := plugin.host.GetMounter()
+	pluginDir := plugin.host.GetPluginDir(plugin.GetPluginName())
+	volumeID, err := mounter.GetDeviceNameFromMount(mountPath, pluginDir)
+	if err != nil {
+		return nil, err
+	}
+	doVolume := &v1.Volume{
+		Name: volName,
+		VolumeSource: v1.VolumeSource{
+			DOVolume: &v1.DOVolumeSource{
+				DiskName: volumeID,
+			},
+		},
+	}
+	return volume.NewSpecFromVolume(doVolume), nil
+}
+
 // 	// NewMounter creates a new volume.Mounter from an API specification.
 // 	// Ownership of the spec pointer in *not* transferred.
 // 	// - spec: The v1.Volume spec
@@ -77,67 +110,24 @@ func (plugin *doVolumePlugin) GetVolumeName(spec *volume.Spec) (string, error) {
 // 	// - name: The volume name, as per the v1.Volume spec.
 // 	// - podUID: The UID of the enclosing pod
 // 	NewUnmounter(name string, podUID types.UID) (Unmounter, error)
-//
-// 	// ConstructVolumeSpec constructs a volume spec based on the given volume name
-// 	// and mountPath. The spec may have incomplete information due to limited
-// 	// information from input. This function is used by volume manager to reconstruct
-// 	// volume spec by reading the volume directories from disk
-// 	ConstructVolumeSpec(volumeName, mountPath string) (*Spec, error)
-//
-// 	// SupportsMountOption returns true if volume plugins supports Mount options
-// 	// Specifying mount options in a volume plugin that doesn't support
-// 	// user specified mount options will result in error creating persistent volumes
-// 	SupportsMountOption() bool
-//
-// 	// SupportsBulkVolumeVerification checks if volume plugin type is capable
-// 	// of enabling bulk polling of all nodes. This can speed up verification of
-// 	// attached volumes by quite a bit, but underlying pluging must support it.
-// 	SupportsBulkVolumeVerification() bool
-// }
-//
+// //
+// // 	// ConstructVolumeSpec constructs a volume spec based on the given volume name
+// // 	// and mountPath. The spec may have incomplete information due to limited
+// // 	// information from input. This function is used by volume manager to reconstruct
+// // 	// volume spec by reading the volume directories from disk
+// // 	ConstructVolumeSpec(volumeName, mountPath string) (*Spec, error)
+// //
+// //
+// //
 
-func getVolumeSource(spec *volume.Spec) (*v1.DOVolumeVolumeSource, bool, error) {
-	if spec.Volume != nil && spec.Volume.AWSElasticBlockStore != nil {
-		return spec.Volume.AWSElasticBlockStore, spec.Volume.AWSElasticBlockStore.ReadOnly, nil
-	} else if spec.PersistentVolume != nil &&
-		spec.PersistentVolume.Spec.AWSElasticBlockStore != nil {
-		return spec.PersistentVolume.Spec.AWSElasticBlockStore, spec.ReadOnly, nil
+func getVolumeSource(spec *volume.Spec) (*v1.DOVolumeSource, error) {
+	if spec.Volume != nil && spec.Volume.DOVolume != nil {
+		return spec.Volume.DOVolume, nil
+	}
+	if spec.PersistentVolume != nil &&
+		spec.PersistentVolume.Spec.DOVolume != nil {
+		return spec.PersistentVolume.Spec.DOVolume, nil
 	}
 
-	return nil, false, fmt.Errorf("Spec does not reference an AWS EBS volume type")
+	return nil, fmt.Errorf("Spec does not reference a Digital Ocean disk volume type")
 }
-
-// func getVolumeSource(
-// 	spec *volume.Spec) (*v1.AWSElasticBlockStoreVolumeSource, bool, error) {
-// 	if spec.Volume != nil && spec.Volume.AWSElasticBlockStore != nil {
-// 		return spec.Volume.AWSElasticBlockStore, spec.Volume.AWSElasticBlockStore.ReadOnly, nil
-// 	} else if spec.PersistentVolume != nil &&
-// 		spec.PersistentVolume.Spec.AWSElasticBlockStore != nil {
-// 		return spec.PersistentVolume.Spec.AWSElasticBlockStore, spec.ReadOnly, nil
-// 	}
-//
-// 	return nil, false, fmt.Errorf("Spec does not reference an AWS EBS volume type")
-// }
-//
-//
-// func getVolumeSource(spec *volume.Spec) (*v1.AzureDiskVolumeSource, error) {
-// 	if spec.Volume != nil && spec.Volume.AzureDisk != nil {
-// 		return spec.Volume.AzureDisk, nil
-// 	}
-// 	if spec.PersistentVolume != nil && spec.PersistentVolume.Spec.AzureDisk != nil {
-// 		return spec.PersistentVolume.Spec.AzureDisk, nil
-// 	}
-//
-// 	return nil, fmt.Errorf("Spec does not reference an Azure disk volume type")
-// }
-//
-// func getVolumeSource(spec *volume.Spec) (*v1.CephFSVolumeSource, bool, error) {
-// 	if spec.Volume != nil && spec.Volume.CephFS != nil {
-// 		return spec.Volume.CephFS, spec.Volume.CephFS.ReadOnly, nil
-// 	} else if spec.PersistentVolume != nil &&
-// 		spec.PersistentVolume.Spec.CephFS != nil {
-// 		return spec.PersistentVolume.Spec.CephFS, spec.ReadOnly, nil
-// 	}
-//
-// 	return nil, false, fmt.Errorf("Spec does not reference a CephFS volume type")
-// }
