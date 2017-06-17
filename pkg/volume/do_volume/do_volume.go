@@ -28,6 +28,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
+	"k8s.io/kubernetes/pkg/volume/util"
 )
 
 const (
@@ -114,6 +115,11 @@ func (plugin *doVolumePlugin) NewMounter(spec *volume.Spec, pod *v1.Pod, _ volum
 	return plugin.newMounterInternal(spec, pod.UID, plugin.host.GetMounter())
 }
 
+// 	// NewUnmounter creates a new volume.Unmounter from recoverable state.
+func (plugin *doVolumePlugin) NewUnmounter(volName string, podUID types.UID) (volume.Unmounter, error) {
+	return plugin.newUnmounterInternal(volName, podUID, plugin.host.GetMounter())
+}
+
 func (plugin *doVolumePlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, mounter mount.Interface) (volume.Mounter, error) {
 	vol, err := getVolumeSource(spec)
 	if err != nil {
@@ -138,19 +144,16 @@ func (plugin *doVolumePlugin) newMounterInternal(spec *volume.Spec, podUID types
 	}, nil
 }
 
-// 	// NewUnmounter creates a new volume.Unmounter from recoverable state.
-// 	// - name: The volume name, as per the v1.Volume spec.
-// 	// - podUID: The UID of the enclosing pod
-// 	NewUnmounter(name string, podUID types.UID) (Unmounter, error)
-// //
-// // 	// ConstructVolumeSpec constructs a volume spec based on the given volume name
-// // 	// and mountPath. The spec may have incomplete information due to limited
-// // 	// information from input. This function is used by volume manager to reconstruct
-// // 	// volume spec by reading the volume directories from disk
-// // 	ConstructVolumeSpec(volumeName, mountPath string) (*Spec, error)
-// //
-// //
-// //
+func (plugin *doVolumePlugin) newUnmounterInternal(volName string, podUID types.UID, mounter mount.Interface) (volume.Unmounter, error) {
+	return &doVolumeUnmounter{
+		&doVolume{
+			volName: volName,
+			podUID:  podUID,
+			mounter: mounter,
+			plugin:  plugin,
+		},
+	}, nil
+}
 
 func getVolumeSource(spec *volume.Spec) (*v1.DOVolumeSource, error) {
 	if spec.Volume != nil && spec.Volume.DOVolume != nil {
@@ -273,6 +276,23 @@ func (b *doVolumeMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error 
 
 	glog.V(4).Infof("Digital Ocean volume %s successfully mounted to %s", b.volumeID, dir)
 	return nil
+}
+
+type doVolumeUnmounter struct {
+	*doVolume
+}
+
+var _ volume.Unmounter = &doVolumeUnmounter{}
+
+// TearDown unmounts the bind mount
+func (c *doVolumeUnmounter) TearDown() error {
+	return c.TearDownAt(c.GetPath())
+}
+
+// TearDownAt unmounts the volume from the specified directory and
+// removes traces of the SetUp procedure.
+func (c *doVolumeUnmounter) TearDownAt(dir string) error {
+	return util.UnmountPath(dir, c.mounter)
 }
 
 func makeGlobalPDPath(host volume.VolumeHost, volume string) string {
