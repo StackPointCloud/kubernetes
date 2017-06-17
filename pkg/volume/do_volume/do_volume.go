@@ -18,8 +18,15 @@ package do_volume
 
 import (
 	"fmt"
+	"os"
+	"path"
 
+	"github.com/golang/glog"
+
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/util/exec"
+	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 )
 
@@ -77,11 +84,13 @@ func (plugin *doVolumePlugin) SupportsBulkVolumeVerification() bool {
 	return false
 }
 
-// 	// ConstructVolumeSpec constructs a volume spec based on the given volume name
-// 	// and mountPath. The spec may have incomplete information due to limited
-// 	// information from input. This function is used by volume manager to reconstruct
-// 	// volume spec by reading the volume directories from disk
-// 	ConstructVolumeSpec(volumeName, mountPath string) (*Spec, error)
+func (plugin *doVolumePlugin) GetAccessModes() []v1.PersistentVolumeAccessMode {
+	return []v1.PersistentVolumeAccessMode{
+		v1.ReadWriteOnce,
+	}
+}
+
+// ConstructVolumeSpec constructs a volume spec based on name and path
 func (plugin *doVolumePlugin) ConstructVolumeSpec(volName, mountPath string) (*volume.Spec, error) {
 	mounter := plugin.host.GetMounter()
 	pluginDir := plugin.host.GetPluginDir(plugin.GetPluginName())
@@ -93,19 +102,42 @@ func (plugin *doVolumePlugin) ConstructVolumeSpec(volName, mountPath string) (*v
 		Name: volName,
 		VolumeSource: v1.VolumeSource{
 			DOVolume: &v1.DOVolumeSource{
-				DiskName: volumeID,
+				VolumeID: volumeID,
 			},
 		},
 	}
 	return volume.NewSpecFromVolume(doVolume), nil
 }
 
-// 	// NewMounter creates a new volume.Mounter from an API specification.
-// 	// Ownership of the spec pointer in *not* transferred.
-// 	// - spec: The v1.Volume spec
-// 	// - pod: The enclosing pod
-// 	NewMounter(spec *Spec, podRef *v1.Pod, opts VolumeOptions) (Mounter, error)
-//
+// NewMounter creates a new volume.Mounter from an API specification
+func (plugin *doVolumePlugin) NewMounter(spec *volume.Spec, pod *v1.Pod, _ volume.VolumeOptions) (volume.Mounter, error) {
+	return plugin.newMounterInternal(spec, pod.UID, plugin.host.GetMounter())
+}
+
+func (plugin *doVolumePlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, mounter mount.Interface) (volume.Mounter, error) {
+	vol, err := getVolumeSource(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	fsType = vol.FSType
+	readOnly := vol.ReadOnly
+	volID := vol.VolumeID
+
+	return &doVolumeMounter{
+		doVolume: &doVolume{
+			volName:  spec.Name(),
+			podUID:   podUID,
+			volumeID: volID,
+			mounter:  mounter,
+			plugin:   plugin,
+		},
+		fsType:      fsType,
+		readOnly:    readOnly,
+		diskMounter: &mount.SafeFormatAndMount{Interface: plugin.host.GetMounter(), Runner: exec.New()},
+	}, nil
+}
+
 // 	// NewUnmounter creates a new volume.Unmounter from recoverable state.
 // 	// - name: The volume name, as per the v1.Volume spec.
 // 	// - podUID: The UID of the enclosing pod
@@ -130,4 +162,119 @@ func getVolumeSource(spec *volume.Spec) (*v1.DOVolumeSource, error) {
 	}
 
 	return nil, fmt.Errorf("Spec does not reference a Digital Ocean disk volume type")
+}
+
+// Mounter
+
+type doVolume struct {
+	volName  string // TODO is this needed?
+	podUID   types.UID
+	volumeID string
+	// Mounter interface that provides system calls to mount the global path to the pod local path.
+	mounter mount.Interface
+	plugin  *doVolumePlugin
+	volume.MetricsNil
+}
+
+func (doVolume *doVolume) GetPath() string {
+	name := doVolumePluginName
+	return doVolume.plugin.host.GetPodVolumeDir(doVolume.podUID,
+		utilstrings.EscapeQualifiedNameForDisk(name), doVolume.volName)
+}
+
+type doVolumeMounter struct {
+	*doVolume
+	// Filesystem type, optional.
+	fsType string
+	// Specifies whether the disk will be attached as read-only.
+	readOnly bool
+	// diskMounter provides the interface that is used to mount the actual block device.
+	diskMounter *mount.SafeFormatAndMount
+}
+
+var _ volume.Mounter = &doVolumeMounter{}
+
+// GetAttributes returns the attributes of the mounter
+func (b *doVolumeMounter) GetAttributes() volume.Attributes {
+	return volume.Attributes{
+		ReadOnly:        b.readOnly,
+		Managed:         !b.readOnly,
+		SupportsSELinux: true,
+	}
+}
+
+// Checks prior to mount operations to verify that the required components (binaries, etc.)
+// to mount the volume are available on the underlying node.
+// If not, it returns an error
+func (b *doVolumeMounter) CanMount() error {
+	return nil
+}
+
+// SetUp attaches the disk and bind mounts to the volume path
+func (b *doVolumeMounter) SetUp(fsGroup *types.UnixGroupID) error {
+	return b.SetUpAt(b.GetPath(), fsGroup)
+}
+
+// SetUpAt attaches the disk and bind mounts to the volume path.
+func (b *doVolumeMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error {
+	// TODO: handle failed mounts here.
+	notMnt, err := b.mounter.IsLikelyNotMountPoint(dir)
+	glog.V(4).Infof("Digital Ocean volume set up: %s %v %v", dir, !notMnt, err)
+	if err != nil && !os.IsNotExist(err) {
+		glog.Errorf("IsLikelyNotMountPoint failed validating mount point: %s %v", dir, err)
+		return err
+	}
+	if !notMnt {
+		return nil
+	}
+
+	globalPDPath := makeGlobalPDPath(b.plugin.host, b.volumeID)
+
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return err
+	}
+
+	// Perform a bind mount to the full path to allow duplicate mounts of the same PD.
+	options := []string{"bind"}
+	if b.readOnly {
+		options = append(options, "ro")
+	}
+	err = b.mounter.Mount(globalPDPath, dir, "", options)
+	if err != nil {
+		notMnt, mntErr := b.mounter.IsLikelyNotMountPoint(dir)
+		if mntErr != nil {
+			glog.Errorf("IsLikelyNotMountPoint failed validating mount point %s: %v", dir, mntErr)
+			return err
+		}
+		if !notMnt {
+			if mntErr = b.mounter.Unmount(dir); mntErr != nil {
+				glog.Errorf("failed to unmount %s: %v", dir, mntErr)
+				return err
+			}
+			notMnt, mntErr := b.mounter.IsLikelyNotMountPoint(dir)
+			if mntErr != nil {
+				glog.Errorf("IsLikelyNotMountPoint failed validating mount point %s: %v", dir, mntErr)
+				return err
+			}
+			if !notMnt {
+				// This is very odd, we don't expect it.  We'll try again next sync loop.
+				glog.Errorf("%s is still mounted, despite call to unmount().  Will try again next sync loop.", dir)
+				return err
+			}
+		}
+		os.Remove(dir)
+		glog.Errorf("Mount of disk %s failed: %v", dir, err)
+		return err
+	}
+
+	if !b.readOnly {
+		volume.SetVolumeOwnership(b, fsGroup)
+	}
+
+	glog.V(4).Infof("Digital Ocean volume %s successfully mounted to %s", b.volumeID, dir)
+	return nil
+}
+
+func makeGlobalPDPath(host volume.VolumeHost, volume string) string {
+	return path.Join(host.GetPluginDir(doVolumePluginName), mount.MountsInGlobalPDPath, volume)
 }
