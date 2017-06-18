@@ -44,6 +44,12 @@ type doVolumePlugin struct {
 	host volume.VolumeHost
 }
 
+var _ volume.VolumePlugin = &doVolumePlugin{}
+var _ volume.PersistentVolumePlugin = &doVolumePlugin{}
+var _ volume.DeletableVolumePlugin = &doVolumePlugin{}
+// var _ volume.ProvisionableVolumePlugin = &doVolumePlugin{}
+
+
 // Init initializes the plugin
 func (plugin *doVolumePlugin) Init(host volume.VolumeHost) error {
 	plugin.host = host
@@ -120,6 +126,10 @@ func (plugin *doVolumePlugin) NewUnmounter(volName string, podUID types.UID) (vo
 	return plugin.newUnmounterInternal(volName, podUID, plugin.host.GetMounter())
 }
 
+// NewDeleter creates a new volume.Deleter which knows how to delete this
+// resource in accordance with the underlying storage provider after the
+// volume's release from a claim
+NewDeleter(spec *Spec) (Deleter, error)
 func (plugin *doVolumePlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, mounter mount.Interface) (volume.Mounter, error) {
 	vol, err := getVolumeSource(spec)
 	if err != nil {
@@ -191,7 +201,7 @@ type doVolumeMounter struct {
 	fsType string
 	// Specifies whether the disk will be attached as read-only.
 	readOnly bool
-	// diskMounter provides the interface that is used to mount the actual block device.
+	// diskMounter provides the interface that is used to mount the actual volume device.
 	diskMounter *mount.SafeFormatAndMount
 }
 

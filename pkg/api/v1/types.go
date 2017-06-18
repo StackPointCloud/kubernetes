@@ -1297,7 +1297,7 @@ type StorageOSPersistentVolumeSource struct {
 	SecretRef *ObjectReference `json:"secretRef,omitempty" protobuf:"bytes,5,opt,name=secretRef"`
 }
 
-// Represents a Volume resource in Digital Ocean.
+// DOVolumeSource represents a Volume resource in Digital Ocean.
 type DOVolumeSource struct {
 	// Unique ID for the volume resource at Digital Ocean.
 	VolumeID string `json:"volumeID" protobuf:"bytes,1,opt,name=volumeID"`
