@@ -17,15 +17,19 @@ limitations under the License.
 package do_volume
 
 import (
+	"fmt"
 	"os"
 	"path"
 
+	"github.com/appc/spec/schema/types/resource"
 	"github.com/golang/glog"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
+	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 )
 
 type doVolume struct {
@@ -181,4 +185,65 @@ func (d *doVolumeDeleter) Delete() error {
 	}
 
 	return nil
+}
+
+type doVolumeProvisioner struct {
+	*doVolume
+	options volume.VolumeOptions
+}
+
+var _ volume.Provisioner = &doVolumeProvisioner{}
+
+// Provision creates the resource at Digital Ocean and waits for it to be available
+func (e *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
+	if !volume.AccessModesContainedInAll(c.plugin.GetAccessModes(), c.options.PVC.Spec.AccessModes) {
+		return nil, fmt.Errorf("invalid AccessModes %v: only AccessModes %v are supported", c.options.PVC.Spec.AccessModes, c.plugin.GetAccessModes())
+	}
+
+	volume, err := d.manager.CreateVolume(e)
+	// get volume ID
+	if err != nil {
+		glog.V(2).Infof("Error creating Digital Ocean volume: %v", err)
+		return err
+	}
+
+	pv := &v1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   c.options.PVName,
+			Labels: map[string]string{},
+			Annotations: map[string]string{
+				volumehelper.VolumeDynamicallyCreatedByKey: "do-volume-dynamic-provisioner",
+			},
+		},
+		Spec: v1.PersistentVolumeSpec{
+			PersistentVolumeReclaimPolicy: c.options.PersistentVolumeReclaimPolicy,
+			AccessModes:                   c.options.PVC.Spec.AccessModes,
+			Capacity: v1.ResourceList{
+				v1.ResourceName(v1.ResourceStorage): resource.MustParse(fmt.Sprintf("%dGi", sizeGB)),
+			},
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				DOVolume: &v1.DOVolumeSource{
+					VolumeID: string(dovolumeID),
+					FSType:   "ext4",
+					ReadOnly: false,
+				},
+			},
+		},
+	}
+
+	if len(c.options.PVC.Spec.AccessModes) == 0 {
+		pv.Spec.AccessModes = c.plugin.GetAccessModes()
+	}
+
+	// if len(labels) != 0 {
+	// 	if pv.Labels == nil {
+	// 		pv.Labels = make(map[string]string)
+	// 	}
+	// 	for k, v := range labels {
+	// 		pv.Labels[k] = v
+	// 	}
+	// }
+
+	return pv, nil
+
 }

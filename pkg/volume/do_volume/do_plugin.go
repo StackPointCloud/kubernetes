@@ -137,6 +137,27 @@ func (plugin *doVolumePlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, err
 	return plugin.newDeleterInternal(spec, manager)
 }
 
+func (plugin *doVolumePlugin) NewProvisioner(options volume.VolumeOptions) (volume.Provisioner, error) {
+	config, err := plugin.getDOToken()
+	if e != nil {
+		return nil, e
+	}
+	manager = NewDOManager(config)
+
+	return plugin.newProvisionerInternal(spec, manager)
+
+}
+
+func (plugin *awsElasticBlockStorePlugin) newProvisionerInternal(options volume.VolumeOptions, manager *doManager) (volume.Provisioner, error) {
+	return &doVolumeProvisioner{
+		doVolume: &doVolume{
+			plugin:  plugin,
+			manager: manager,
+		},
+		options: options,
+	}, nil
+}
+
 func (plugin *doVolumePlugin) newMDeleterInternal(spec *volume.Spec, manager *doManager) (volume.Deleter, error) {
 	vol, err := getVolumeSource(spec)
 	if err != nil {
