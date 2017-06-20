@@ -17,177 +17,28 @@ limitations under the License.
 package do_volume
 
 import (
-	"fmt"
 	"os"
 	"path"
 
 	"github.com/golang/glog"
 
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
 )
 
-const (
-	doVolumePluginName = "kubernetes.io/do-volume"
-)
-
-// ProbeVolumePlugins is the primary entrypoint for volume plugins.
-func ProbeVolumePlugins() []volume.VolumePlugin {
-	return []volume.VolumePlugin{&doVolumePlugin{}}
-}
-
-type doVolumePlugin struct {
-	host volume.VolumeHost
-}
-
-var _ volume.VolumePlugin = &doVolumePlugin{}
-var _ volume.PersistentVolumePlugin = &doVolumePlugin{}
-var _ volume.DeletableVolumePlugin = &doVolumePlugin{}
-// var _ volume.ProvisionableVolumePlugin = &doVolumePlugin{}
-
-
-// Init initializes the plugin
-func (plugin *doVolumePlugin) Init(host volume.VolumeHost) error {
-	plugin.host = host
-	return nil
-}
-
-func (plugin *doVolumePlugin) GetPluginName() string {
-	return doVolumePluginName
-}
-
-// GetVolumeName returns the ID to uniquely identifying the volume spec.
-func (plugin *doVolumePlugin) GetVolumeName(spec *volume.Spec) (string, error) {
-	volumeSource, err := getVolumeSource(spec)
-	if err != nil {
-		return "", err
-	}
-
-	return volumeSource.VolumeID, nil
-}
-
-// CanSupport returns a boolen that indicates if the volume is supported
-func (plugin *doVolumePlugin) CanSupport(spec *volume.Spec) bool {
-	return (spec.PersistentVolume != nil && spec.PersistentVolume.Spec.DOVolume != nil) ||
-		(spec.Volume != nil && spec.PersistentVolume.Spec.DOVolume != nil)
-}
-
-// RequiresRemount returns false if this plugin desn't need re-mount
-func (plugin *doVolumePlugin) RequiresRemount() bool {
-	return false
-}
-
-// SupportsMountOption returns false if volume plugin don't supports Mount options
-func (plugin *doVolumePlugin) SupportsMountOption() bool {
-	return false
-}
-
-// SupportsBulkVolumeVerification checks if volume plugin allows bulk volume verification
-func (plugin *doVolumePlugin) SupportsBulkVolumeVerification() bool {
-	return false
-}
-
-func (plugin *doVolumePlugin) GetAccessModes() []v1.PersistentVolumeAccessMode {
-	return []v1.PersistentVolumeAccessMode{
-		v1.ReadWriteOnce,
-	}
-}
-
-// ConstructVolumeSpec constructs a volume spec based on name and path
-func (plugin *doVolumePlugin) ConstructVolumeSpec(volName, mountPath string) (*volume.Spec, error) {
-	mounter := plugin.host.GetMounter()
-	pluginDir := plugin.host.GetPluginDir(plugin.GetPluginName())
-	volumeID, err := mounter.GetDeviceNameFromMount(mountPath, pluginDir)
-	if err != nil {
-		return nil, err
-	}
-	doVolume := &v1.Volume{
-		Name: volName,
-		VolumeSource: v1.VolumeSource{
-			DOVolume: &v1.DOVolumeSource{
-				VolumeID: volumeID,
-			},
-		},
-	}
-	return volume.NewSpecFromVolume(doVolume), nil
-}
-
-// NewMounter creates a new volume.Mounter from an API specification
-func (plugin *doVolumePlugin) NewMounter(spec *volume.Spec, pod *v1.Pod, _ volume.VolumeOptions) (volume.Mounter, error) {
-	return plugin.newMounterInternal(spec, pod.UID, plugin.host.GetMounter())
-}
-
-// 	// NewUnmounter creates a new volume.Unmounter from recoverable state.
-func (plugin *doVolumePlugin) NewUnmounter(volName string, podUID types.UID) (volume.Unmounter, error) {
-	return plugin.newUnmounterInternal(volName, podUID, plugin.host.GetMounter())
-}
-
-// NewDeleter creates a new volume.Deleter which knows how to delete this
-// resource in accordance with the underlying storage provider after the
-// volume's release from a claim
-NewDeleter(spec *Spec) (Deleter, error)
-func (plugin *doVolumePlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, mounter mount.Interface) (volume.Mounter, error) {
-	vol, err := getVolumeSource(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	fsType = vol.FSType
-	readOnly := vol.ReadOnly
-	volID := vol.VolumeID
-
-	return &doVolumeMounter{
-		doVolume: &doVolume{
-			volName:  spec.Name(),
-			podUID:   podUID,
-			volumeID: volID,
-			mounter:  mounter,
-			plugin:   plugin,
-		},
-		fsType:      fsType,
-		readOnly:    readOnly,
-		diskMounter: &mount.SafeFormatAndMount{Interface: plugin.host.GetMounter(), Runner: exec.New()},
-	}, nil
-}
-
-func (plugin *doVolumePlugin) newUnmounterInternal(volName string, podUID types.UID, mounter mount.Interface) (volume.Unmounter, error) {
-	return &doVolumeUnmounter{
-		&doVolume{
-			volName: volName,
-			podUID:  podUID,
-			mounter: mounter,
-			plugin:  plugin,
-		},
-	}, nil
-}
-
-func getVolumeSource(spec *volume.Spec) (*v1.DOVolumeSource, error) {
-	if spec.Volume != nil && spec.Volume.DOVolume != nil {
-		return spec.Volume.DOVolume, nil
-	}
-	if spec.PersistentVolume != nil &&
-		spec.PersistentVolume.Spec.DOVolume != nil {
-		return spec.PersistentVolume.Spec.DOVolume, nil
-	}
-
-	return nil, fmt.Errorf("Spec does not reference a Digital Ocean disk volume type")
-}
-
-// Mounter
-
 type doVolume struct {
 	volName  string // TODO is this needed?
 	podUID   types.UID
 	volumeID string
-	// Mounter interface that provides system calls to mount the global path to the pod local path.
-	mounter mount.Interface
-	plugin  *doVolumePlugin
+	mounter  mount.Interface
+	plugin   *doVolumePlugin
+	manager  *DOManager
 	volume.MetricsNil
 }
+
+var _ volume.Volume = &doVolume{}
 
 func (doVolume *doVolume) GetPath() string {
 	name := doVolumePluginName
@@ -307,4 +158,27 @@ func (c *doVolumeUnmounter) TearDownAt(dir string) error {
 
 func makeGlobalPDPath(host volume.VolumeHost, volume string) string {
 	return path.Join(host.GetPluginDir(doVolumePluginName), mount.MountsInGlobalPDPath, volume)
+}
+
+type doVolumeDeleter struct {
+	*doVolume
+}
+
+var _ volume.Deleter = &doVolumeDeleter{}
+
+func (d *doVolumeDeleter) GetPath() string {
+	name := doVolumePluginName
+	return doVolume.plugin.host.GetPodVolumeDir(doVolume.podUID,
+		utilstrings.EscapeQualifiedNameForDisk(name), doVolume.volName)
+}
+
+func (d *doVolumeDeleter) Delete() error {
+
+	err := d.manager.DeleteVolume(d.volumeID)
+	if err != nil {
+		glog.V(2).Infof("Error deleting Digital Ocean volume %s: %v", volumeID, err)
+		return err
+	}
+
+	return nil
 }
