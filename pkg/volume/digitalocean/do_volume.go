@@ -14,26 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package do_volume
+package digitalocean
 
 import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
-	"github.com/appc/spec/schema/types/resource"
 	"github.com/golang/glog"
 
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/util/mount"
+	kstrings "k8s.io/kubernetes/pkg/util/strings"
+
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 )
 
+const (
+	volumeNameMaxLength = 64
+)
+
 type doVolume struct {
-	volName  string // TODO is this needed?
+	volName  string
 	podUID   types.UID
 	volumeID string
 	mounter  mount.Interface
@@ -44,10 +52,9 @@ type doVolume struct {
 
 var _ volume.Volume = &doVolume{}
 
-func (doVolume *doVolume) GetPath() string {
-	name := doVolumePluginName
-	return doVolume.plugin.host.GetPodVolumeDir(doVolume.podUID,
-		utilstrings.EscapeQualifiedNameForDisk(name), doVolume.volName)
+func (v *doVolume) GetPath() string {
+	return v.plugin.host.GetPodVolumeDir(
+		v.podUID, kstrings.EscapeQualifiedNameForDisk(doVolumePluginName), v.volName)
 }
 
 type doVolumeMounter struct {
@@ -63,10 +70,10 @@ type doVolumeMounter struct {
 var _ volume.Mounter = &doVolumeMounter{}
 
 // GetAttributes returns the attributes of the mounter
-func (b *doVolumeMounter) GetAttributes() volume.Attributes {
+func (vm *doVolumeMounter) GetAttributes() volume.Attributes {
 	return volume.Attributes{
-		ReadOnly:        b.readOnly,
-		Managed:         !b.readOnly,
+		ReadOnly:        vm.readOnly,
+		Managed:         !vm.readOnly,
 		SupportsSELinux: true,
 	}
 }
@@ -74,19 +81,19 @@ func (b *doVolumeMounter) GetAttributes() volume.Attributes {
 // Checks prior to mount operations to verify that the required components (binaries, etc.)
 // to mount the volume are available on the underlying node.
 // If not, it returns an error
-func (b *doVolumeMounter) CanMount() error {
+func (vm *doVolumeMounter) CanMount() error {
 	return nil
 }
 
 // SetUp attaches the disk and bind mounts to the volume path
-func (b *doVolumeMounter) SetUp(fsGroup *types.UnixGroupID) error {
-	return b.SetUpAt(b.GetPath(), fsGroup)
+func (vm *doVolumeMounter) SetUp(fsGroup *types.UnixGroupID) error {
+	return vm.SetUpAt(vm.GetPath(), fsGroup)
 }
 
 // SetUpAt attaches the disk and bind mounts to the volume path.
-func (b *doVolumeMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error {
+func (vm *doVolumeMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error {
 	// TODO: handle failed mounts here.
-	notMnt, err := b.mounter.IsLikelyNotMountPoint(dir)
+	notMnt, err := vm.mounter.IsLikelyNotMountPoint(dir)
 	glog.V(4).Infof("Digital Ocean volume set up: %s %v %v", dir, !notMnt, err)
 	if err != nil && !os.IsNotExist(err) {
 		glog.Errorf("IsLikelyNotMountPoint failed validating mount point: %s %v", dir, err)
@@ -96,30 +103,30 @@ func (b *doVolumeMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error 
 		return nil
 	}
 
-	globalPDPath := makeGlobalPDPath(b.plugin.host, b.volumeID)
+	globalPDPath := makeGlobalPDPath(vm.plugin.host, vm.volumeID)
 
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	if err = os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 
 	// Perform a bind mount to the full path to allow duplicate mounts of the same PD.
 	options := []string{"bind"}
-	if b.readOnly {
+	if vm.readOnly {
 		options = append(options, "ro")
 	}
-	err = b.mounter.Mount(globalPDPath, dir, "", options)
+	err = vm.mounter.Mount(globalPDPath, dir, "", options)
 	if err != nil {
-		notMnt, mntErr := b.mounter.IsLikelyNotMountPoint(dir)
+		notMnt, mntErr := vm.mounter.IsLikelyNotMountPoint(dir)
 		if mntErr != nil {
 			glog.Errorf("IsLikelyNotMountPoint failed validating mount point %s: %v", dir, mntErr)
 			return err
 		}
 		if !notMnt {
-			if mntErr = b.mounter.Unmount(dir); mntErr != nil {
+			if mntErr = vm.mounter.Unmount(dir); mntErr != nil {
 				glog.Errorf("failed to unmount %s: %v", dir, mntErr)
 				return err
 			}
-			notMnt, mntErr := b.mounter.IsLikelyNotMountPoint(dir)
+			notMnt, mntErr := vm.mounter.IsLikelyNotMountPoint(dir)
 			if mntErr != nil {
 				glog.Errorf("IsLikelyNotMountPoint failed validating mount point %s: %v", dir, mntErr)
 				return err
@@ -135,11 +142,11 @@ func (b *doVolumeMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error 
 		return err
 	}
 
-	if !b.readOnly {
-		volume.SetVolumeOwnership(b, fsGroup)
+	if !vm.readOnly {
+		volume.SetVolumeOwnership(vm, fsGroup)
 	}
 
-	glog.V(4).Infof("Digital Ocean volume %s successfully mounted to %s", b.volumeID, dir)
+	glog.V(4).Infof("Digital Ocean volume %s successfully mounted to %s", vm.volumeID, dir)
 	return nil
 }
 
@@ -150,18 +157,14 @@ type doVolumeUnmounter struct {
 var _ volume.Unmounter = &doVolumeUnmounter{}
 
 // TearDown unmounts the bind mount
-func (c *doVolumeUnmounter) TearDown() error {
-	return c.TearDownAt(c.GetPath())
+func (vu *doVolumeUnmounter) TearDown() error {
+	return vu.TearDownAt(vu.GetPath())
 }
 
 // TearDownAt unmounts the volume from the specified directory and
 // removes traces of the SetUp procedure.
-func (c *doVolumeUnmounter) TearDownAt(dir string) error {
-	return util.UnmountPath(dir, c.mounter)
-}
-
-func makeGlobalPDPath(host volume.VolumeHost, volume string) string {
-	return path.Join(host.GetPluginDir(doVolumePluginName), mount.MountsInGlobalPDPath, volume)
+func (vu *doVolumeUnmounter) TearDownAt(dir string) error {
+	return util.UnmountPath(dir, vu.mounter)
 }
 
 type doVolumeDeleter struct {
@@ -170,20 +173,17 @@ type doVolumeDeleter struct {
 
 var _ volume.Deleter = &doVolumeDeleter{}
 
-func (d *doVolumeDeleter) GetPath() string {
-	name := doVolumePluginName
-	return doVolume.plugin.host.GetPodVolumeDir(doVolume.podUID,
-		utilstrings.EscapeQualifiedNameForDisk(name), doVolume.volName)
+func (vd *doVolumeDeleter) GetPath() string {
+	return vd.plugin.host.GetPodVolumeDir(
+		vd.podUID, kstrings.EscapeQualifiedNameForDisk(doVolumePluginName), vd.volName)
 }
 
-func (d *doVolumeDeleter) Delete() error {
-
-	err := d.manager.DeleteVolume(d.volumeID)
+func (vd *doVolumeDeleter) Delete() error {
+	err := vd.manager.DeleteVolume(vd.volumeID)
 	if err != nil {
-		glog.V(2).Infof("Error deleting Digital Ocean volume %s: %v", volumeID, err)
+		glog.V(2).Infof("Error deleting Digital Ocean volume %s: %v", vd.volumeID, err)
 		return err
 	}
-
 	return nil
 }
 
@@ -195,13 +195,18 @@ type doVolumeProvisioner struct {
 var _ volume.Provisioner = &doVolumeProvisioner{}
 
 // Provision creates the resource at Digital Ocean and waits for it to be available
-func (e *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
-	if !volume.AccessModesContainedInAll(c.plugin.GetAccessModes(), c.options.PVC.Spec.AccessModes) {
-		return nil, fmt.Errorf("invalid AccessModes %v: only AccessModes %v are supported", c.options.PVC.Spec.AccessModes, c.plugin.GetAccessModes())
+func (vp *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
+	if !volume.AccessModesContainedInAll(vp.plugin.GetAccessModes(), vp.options.PVC.Spec.AccessModes) {
+		return nil, fmt.Errorf("invalid AccessModes %v: only AccessModes %v are supported",
+			vp.options.PVC.Spec.AccessModes, vp.plugin.GetAccessModes())
 	}
 
-	volume, err := d.manager.CreateVolume(e)
-	// get volume ID
+	name := strings.ToLower(volume.GenerateVolumeName(vp.options.ClusterName, vp.options.PVName, volumeNameMaxLength))
+	description := fmt.Sprintf("kubernetes volume for cluster %s", vp.options.ClusterName)
+	capacity := vp.options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
+	sizeGB := int(volume.RoundUpSize(capacity.Value(), 1024*1024*1024))
+
+	volumeID, err := vp.manager.CreateVolume(name, description, sizeGB)
 	if err != nil {
 		glog.V(2).Infof("Error creating Digital Ocean volume: %v", err)
 		return err
@@ -209,21 +214,21 @@ func (e *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 
 	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   c.options.PVName,
+			Name:   vp.options.PVName,
 			Labels: map[string]string{},
 			Annotations: map[string]string{
 				volumehelper.VolumeDynamicallyCreatedByKey: "do-volume-dynamic-provisioner",
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
-			PersistentVolumeReclaimPolicy: c.options.PersistentVolumeReclaimPolicy,
-			AccessModes:                   c.options.PVC.Spec.AccessModes,
+			PersistentVolumeReclaimPolicy: vp.options.PersistentVolumeReclaimPolicy,
+			AccessModes:                   vp.options.PVC.Spec.AccessModes,
 			Capacity: v1.ResourceList{
 				v1.ResourceName(v1.ResourceStorage): resource.MustParse(fmt.Sprintf("%dGi", sizeGB)),
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				DOVolume: &v1.DOVolumeSource{
-					VolumeID: string(dovolumeID),
+					VolumeID: volumeID,
 					FSType:   "ext4",
 					ReadOnly: false,
 				},
@@ -231,19 +236,13 @@ func (e *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 		},
 	}
 
-	if len(c.options.PVC.Spec.AccessModes) == 0 {
-		pv.Spec.AccessModes = c.plugin.GetAccessModes()
+	if len(vp.options.PVC.Spec.AccessModes) == 0 {
+		pv.Spec.AccessModes = vp.plugin.GetAccessModes()
 	}
 
-	// if len(labels) != 0 {
-	// 	if pv.Labels == nil {
-	// 		pv.Labels = make(map[string]string)
-	// 	}
-	// 	for k, v := range labels {
-	// 		pv.Labels[k] = v
-	// 	}
-	// }
-
 	return pv, nil
+}
 
+func makeGlobalPDPath(host volume.VolumeHost, volume string) string {
+	return path.Join(host.GetPluginDir(doVolumePluginName), mount.MountsInGlobalPDPath, volume)
 }

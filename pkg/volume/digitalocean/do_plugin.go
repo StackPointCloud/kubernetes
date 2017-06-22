@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package do_volume
+package digitalocean
 
 import (
 	"fmt"
@@ -33,6 +33,7 @@ const (
 	secretName         = "digitalocean"
 	secretToken        = "token"
 	secretRegion       = "region"
+	labelDropletName   = "stackpoint.io/instance_id"
 )
 
 // ProbeVolumePlugins is the primary entrypoint for volume plugins.
@@ -47,8 +48,8 @@ type doVolumePlugin struct {
 var _ volume.VolumePlugin = &doVolumePlugin{}
 var _ volume.PersistentVolumePlugin = &doVolumePlugin{}
 var _ volume.DeletableVolumePlugin = &doVolumePlugin{}
-
-// var _ volume.ProvisionableVolumePlugin = &doVolumePlugin{}
+var _ volume.ProvisionableVolumePlugin = &doVolumePlugin{}
+var _ volume.AttachableVolumePlugin = &doVolumePlugin{}
 
 // Init initializes the plugin
 func (plugin *doVolumePlugin) Init(host volume.VolumeHost) error {
@@ -128,7 +129,7 @@ func (plugin *doVolumePlugin) NewUnmounter(volName string, podUID types.UID) (vo
 
 // NewDeleter creates a new volume.Deleter which knows how to delete this resource
 func (plugin *doVolumePlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, error) {
-	config, err := plugin.getDOToken()
+	config, e := plugin.getDOToken()
 	if e != nil {
 		return nil, e
 	}
@@ -139,16 +140,54 @@ func (plugin *doVolumePlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, err
 
 func (plugin *doVolumePlugin) NewProvisioner(options volume.VolumeOptions) (volume.Provisioner, error) {
 	config, err := plugin.getDOToken()
-	if e != nil {
-		return nil, e
+	if err != nil {
+		return nil, err
 	}
 	manager = NewDOManager(config)
 
 	return plugin.newProvisionerInternal(spec, manager)
-
 }
 
-func (plugin *awsElasticBlockStorePlugin) newProvisionerInternal(options volume.VolumeOptions, manager *doManager) (volume.Provisioner, error) {
+func (plugin *doVolumePlugin) NewAttacher() (volume.Attacher, error) {
+	config, err := plugin.getDOToken()
+	if err != nil {
+		return nil, err
+	}
+	manager = NewDOManager(config)
+
+	return plugin.newAttacherInternal(manager)
+}
+
+func (plugin *doVolumePlugin) NewDetacher() (volume.Detacher, error) {
+	config, err := plugin.getDOToken()
+	if err != nil {
+		return nil, err
+	}
+	manager = NewDOManager(config)
+
+	return plugin.newDetacherInternal(manager)
+}
+
+func (plugin *doVolumePlugin) GetDeviceMountRefs(deviceMountPath string) ([]string, error) {
+	mounter := plugin.host.GetMounter()
+	return mount.GetMountRefs(mounter, deviceMountPath)
+}
+
+func (plugin *doVolumePlugin) newAttacherInternal(manager *doManager) (volume.Attacher, error) {
+	return &doVolumeAttacher{
+		host:    plugin.host,
+		manager: manager,
+	}, nil
+}
+
+func (plugin *doVolumePlugin) newDetacherInternal(manager *doManager) (volume.Attacher, error) {
+	return &doVolumeDetacher{
+		host:    plugin.host,
+		manager: manager,
+	}, nil
+}
+
+func (plugin *doVolumePlugin) newProvisionerInternal(options volume.VolumeOptions, manager *doManager) (volume.Provisioner, error) {
 	return &doVolumeProvisioner{
 		doVolume: &doVolume{
 			plugin:  plugin,
