@@ -17,17 +17,19 @@ limitations under the License.
 package digitalocean
 
 import (
+	"fmt"
+
+	"github.com/digitalocean/godo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/volume"
-  "github.com/digitalocean/godo"
 )
 
 type doVolumeAttacher struct {
 	// plugin     *doVolumePlugin
 	host    volume.VolumeHost
-	manager *DOManager
+	manager *doManager
 }
 
 var _ volume.Attacher = &doVolumeAttacher{}
@@ -53,53 +55,26 @@ var _ volume.Attacher = &doVolumeAttacher{}
 // MountDevice(spec *Spec, devicePath string, deviceMountPath string) error
 
 // Attaches the volume specified by the given spec to the node
-func (attacher *doVolumeAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (string, error) {
+func (va *doVolumeAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (string, error) {
 	volumeSource, err := getVolumeSource(spec)
 	if err != nil {
 		return "", err
 	}
 
-  // try to find droplet with same name as the kubernetes node
-  var found *godo.Droplet
-	droplets := attacher.manager.DropletList()
-  for _, d := range droplets {
-    if d.Name == nodeName {
-      found = d
-      break
-    }
-  }
-
-  // if not found, look for other kubernetes properties
-  // Internal IP seems to be our safest bet when names doesn't match
-  if found == nil {
-    node, err := attacher.nodeFromName(nodeName)
-    for _, d := range droplets {
-      for _, a := range node.Status.Addresses {
-        if a.Type == v1.NodeInternalIP {
-          ip, err = found.PrivateIPv4()
-          if e != nil {
-            return "", err
-          }
-          if ip == a.Address {
-            found = d
-            break
-        }
-      }
-    }
-    if found != nil {
-      break
-    }
-  }
-
-  if found == nil {
-    return "" , fmt.Errorf("Couldn't match droplet.name to node name, nor droplet privateipv4 to kubernetes node internalip ")
-  }
-
 	// check if disk is already attached to node
-  droplet := attacher.manager.GetDroplet(found.ID)
+	found, err := findDroplet(nodeName)
+	if err != nil {
+		return "", err
+	}
 
-  // devicePath, err := attacher.awsVolumes.AttachDisk(volumeID, nodeName, readOnly)
+	// FIXME currently droplet lists don't fill volumes but they will
+	// For the time being, we nned to retrieve the droplet
+	// droplet, err := va.manager.GetDroplet(found.ID)
+	// if err != nil {
+	// 	return "", err
+	// }
 
+	// devicePath, err := attacher.awsVolumes.AttachDisk(volumeID, nodeName, readOnly)
 
 	// if not attach to node
 
@@ -324,20 +299,46 @@ type doVolumeDetacher struct {
 // 	volumeMap[volumeSpec] = check
 // }
 
+func (va *doVolumeAttacher) findDroplet(nodeName types.NodeName) (*godo.Droplet, error) {
+
+	// try to find droplet with same name as the kubernetes node
+	droplets, err := va.manager.DropletList()
+
+	for _, droplet := range droplets {
+		if droplet.Name == nodeName {
+			return droplet, nil
+		}
+	}
+
+	// if not found, look for other kubernetes properties
+	// Internal IP seems to be our safest bet when names doesn't match
+	node, err := va.nodeFromName(nodeName)
+	for _, droplet := range droplets {
+		for _, address := range node.Status.Addresses {
+			if address.Type == v1.NodeInternalIP {
+				ip, err = droplet.PrivateIPv4()
+				if err != nil {
+					return nil, err
+				}
+				if ip == address.Address {
+					return droplet
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("Couldn't match droplet name to node name, nor droplet private ip to node internal ip")
+}
+
 // nodeNametoDroplet takes a node name and returns the droplet
-func (attacher *doVolumeAttacher) nodeFromName(nodeName types.NodeName) (*v1.Node, error) {
+func (va *doVolumeAttacher) nodeFromName(nodeName types.NodeName) (*v1.Node, error) {
 
-	kubeClient, err := attacher.host.GetKubeClient()
+	kubeClient := va.host.GetKubeClient()
 	if err != nil {
 		return nil, err
 	}
 
-	node, err := kubeClient.Core().Nodes().Get(nodeName, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	node, err = ca.client.Core().Nodes().Get(node.Name, metav1.GetOptions{})
+	node, err = kubeClient.Core().Nodes().Get(node.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

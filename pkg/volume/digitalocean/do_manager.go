@@ -18,10 +18,24 @@ package digitalocean
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/digitalocean/godo"
 	"github.com/digitalocean/godo/context"
+	"github.com/golang/glog"
 	"golang.org/x/oauth2"
+	"k8s.io/apimachinery/pkg/util/wait"
+)
+
+const (
+	volumeAttachmentStatusConsecutiveErrorLimit = 10
+	// waiting for attach/detach operation to complete. Starting with 10
+	// seconds, multiplying by 1.2 with each step and taking 21 steps at maximum
+	// it will time out after 31.11 minutes, which roughly corresponds to GCE
+	// timeout (30 minutes).
+	genericWaitTimeDelay         = 10 * time.Second
+	volumeAttachmentStatusFactor = 1.2
+	volumeAttachmentStatusSteps  = 21
 )
 
 // DOManager communicates with the DO API
@@ -137,6 +151,15 @@ func (m *doManager) DropletList() ([]godo.Droplet, error) {
 	return list, nil
 }
 
+func (m *doManager) GetVolume(volumeID string) (*godo.Volume, error) {
+	vol, _, err := m.client.Storage.GetVolume(m.ctx, ID)
+	if err != nil {
+		m.removeDOClient()
+		return nil, err
+	}
+	return vol, nil
+}
+
 // DeleteVolume deletes a Digital Ocean volume
 func (m *doManager) DeleteVolume(volumeID string) error {
 	m.refreshDOClient()
@@ -169,91 +192,73 @@ func (m *doManager) CreateVolume(name, description string, sizeGB int) (string, 
 }
 
 // AttachDisk attaches disk to given node
-// func (c *doManager) AttachDisk(volumeID string, dropletID, readOnly bool) (string, error) {
-// disk, err := newAWSDisk(c, diskName)
-// if err != nil {
-// 	m.removeDOClient()
-// 	return "", err
-// }
+// returns the path the disk is being attached to
+func (m *doManager) AttachDisk(volumeID string, dropletID, readOnly bool) (string, error) {
+	vol, err := m.GetVolume(volumeID)
+	if err != nil {
+		m.removeDOClient()
+		return "", err
+	}
 
-//
-// 	awsInstance, info, err := c.getFullInstance(nodeName)
-// 	if err != nil {
-// 		return "", fmt.Errorf("error finding instance %s: %v", nodeName, err)
-// 	}
-//
-// 	if readOnly {
-// 		return "", errors.New("AWS volumes cannot be mounted read-only")
-// 	}
-//
-// 	// mountDevice will hold the device where we should try to attach the disk
-// 	var mountDevice mountDevice
-// 	// alreadyAttached is true if we have already called AttachVolume on this disk
-// 	var alreadyAttached bool
-//
-// 	// attachEnded is set to true if the attach operation completed
-// 	// (successfully or not), and is thus no longer in progress
-// 	attachEnded := false
-// 	defer func() {
-// 		if attachEnded {
-// 			if !c.endAttaching(awsInstance, disk.awsID, mountDevice) {
-// 				glog.Errorf("endAttaching called for disk %q when attach not in progress", disk.awsID)
-// 			}
-// 		}
-// 	}()
-//
-// 	mountDevice, alreadyAttached, err = c.getMountDevice(awsInstance, info, disk.awsID, true)
-// 	if err != nil {
-// 		return "", err
-// 	}
-//
-// 	// Inside the instance, the mountpoint always looks like /dev/xvdX (?)
-// hostDevice := "/dev/xvd" + string(mountDevice)
-// 	// We are using xvd names (so we are HVM only)
-// 	// See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
-// 	ec2Device := "/dev/xvd" + string(mountDevice)
-//
-// 	if !alreadyAttached {
-// 		request := &ec2.AttachVolumeInput{
-// 			Device:     aws.String(ec2Device),
-// 			InstanceId: aws.String(awsInstance.awsID),
-// 			VolumeId:   disk.awsID.awsString(),
-// 		}
-//
-// 		attachResponse, err := c.ec2.AttachVolume(request)
-// 		if err != nil {
-// 			attachEnded = true
-// 			// TODO: Check if the volume was concurrently attached?
-// 			return "", wrapAttachError(err, disk, awsInstance.awsID)
-// 		}
-// 		if da, ok := c.deviceAllocators[awsInstance.nodeName]; ok {
-// 			da.Deprioritize(mountDevice)
-// 		}
-// 		glog.V(2).Infof("AttachVolume volume=%q instance=%q request returned %v", disk.awsID, awsInstance.awsID, attachResponse)
-// 	}
-//
-// 	attachment, err := disk.waitForAttachmentStatus("attached")
-// 	if err != nil {
-// 		return "", err
-// 	}
-//
-// 	// The attach operation has finished
-// 	attachEnded = true
-//
-// 	// Double check the attachment to be 100% sure we attached the correct volume at the correct mountpoint
-// 	// It could happen otherwise that we see the volume attached from a previous/separate AttachVolume call,
-// 	// which could theoretically be against a different device (or even instance).
-// 	if attachment == nil {
-// 		// Impossible?
-// 		return "", fmt.Errorf("unexpected state: attachment nil after attached %q to %q", diskName, nodeName)
-// 	}
-// 	if ec2Device != aws.StringValue(attachment.Device) {
-// 		return "", fmt.Errorf("disk attachment of %q to %q failed: requested device %q but found %q", diskName, nodeName, ec2Device, aws.StringValue(attachment.Device))
-// 	}
-// 	if awsInstance.awsID != aws.StringValue(attachment.InstanceId) {
-// 		return "", fmt.Errorf("disk attachment of %q to %q failed: requested instance %q but found %q", diskName, nodeName, awsInstance.awsID, aws.StringValue(attachment.InstanceId))
-// 	}
-//
-//return hostDevice, nil
-// 	return "", nil
-// }
+	needAttach := true
+	for id := range vol.DropletIDs {
+		if id == dropletID {
+			needAttach = false
+		}
+	}
+
+	if needAttach {
+		action, _, err := m.client.StorageActions.Attach(m.ctx, volumeID, dropletID)
+		if err != nil {
+			return "", err
+		}
+		glog.V(2).Infof("AttachVolume volume=%q droplet=%q requested")
+		err := m.WaitForVolumeAttach(volumeID, action.ID)
+		if err != nil {
+			return "", err
+		}
+	}
+	return "/dev/disk/by-id/scsi-0DO" + vol.Name, nil
+}
+
+func (m *doManager) GetVolumeAction(volumeID string, actionID int) (*godo.Action, error) {
+	action, _, err := m.client.StorageActions.Get(m.ctx, volumeID, actionID)
+	if err != nil {
+		m.removeDOClient()
+		return nil, err
+	}
+	return action, nil
+}
+
+func (m *doManager) WaitForVolumeAttach(volumeID, actionID) error {
+	backoff := wait.Backoff{
+		Duration: volumeAttachmentStatusInitialDelay,
+		Factor:   volumeAttachmentStatusFactor,
+		Steps:    volumeAttachmentStatusSteps,
+	}
+
+	errorCount := 0
+	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+		action, e := m.GetVolumeAction(volumeID, actionID)
+		if e != nil {
+			errorCount++
+			if errorCount > volumeAttachmentStatusConsecutiveErrorLimit {
+				return false, e
+			} else {
+				glog.Warningf("Ignoring error from get volume action; will retry: %q", e)
+				return false, nil
+			}
+		} else {
+			errorCount = 0
+		}
+
+		if action.Status != godo.ActionCompleted {
+			glog.V(2).Infof("Waiting for volume %q state: actual=%s, desired=%s",
+				volumeID, action.Status, godo.ActionCompleted)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	return err
+}
