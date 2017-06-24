@@ -18,12 +18,22 @@ package digitalocean
 
 import (
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/digitalocean/godo"
+	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/util/exec"
+	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
+	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+)
+
+const (
+	checkSleepDuration = time.Second
 )
 
 type doVolumeAttacher struct {
@@ -34,26 +44,6 @@ type doVolumeAttacher struct {
 
 var _ volume.Attacher = &doVolumeAttacher{}
 
-// // VolumesAreAttached checks whether the list of volumes still attached to the specified
-// // node. It returns a map which maps from the volume spec to the checking result.
-// // If an error is occurred during checking, the error will be returned
-// VolumesAreAttached(specs []*Spec, nodeName types.NodeName) (map[*Spec]bool, error)
-//
-// // WaitForAttach blocks until the device is attached to this
-// // node. If it successfully attaches, the path to the device
-// // is returned. Otherwise, if the device does not attach after
-// // the given timeout period, an error will be returned.
-// WaitForAttach(spec *Spec, devicePath string, timeout time.Duration) (string, error)
-//
-// // GetDeviceMountPath returns a path where the device should
-// // be mounted after it is attached. This is a global mount
-// // point which should be bind mounted for individual volumes.
-// GetDeviceMountPath(spec *Spec) (string, error)
-//
-// // MountDevice mounts the disk to a global path which
-// // individual pods can then bind mount
-// MountDevice(spec *Spec, devicePath string, deviceMountPath string) error
-
 // Attaches the volume specified by the given spec to the node
 func (va *doVolumeAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (string, error) {
 	volumeSource, err := getVolumeSource(spec)
@@ -61,178 +51,148 @@ func (va *doVolumeAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (
 		return "", err
 	}
 
-	// check if disk is already attached to node
-	found, err := findDroplet(nodeName)
+	found, err := va.findDroplet(string(nodeName))
 	if err != nil {
 		return "", err
 	}
 
 	// FIXME currently droplet lists don't fill volumes but they will
 	// For the time being, we nned to retrieve the droplet
-	// droplet, err := va.manager.GetDroplet(found.ID)
-	// if err != nil {
-	// 	return "", err
-	// }
+	droplet, err := va.manager.GetDroplet(found.ID)
+	if err != nil {
+		return "", err
+	}
 
-	// devicePath, err := attacher.awsVolumes.AttachDisk(volumeID, nodeName, readOnly)
+	devicePath, err := va.manager.AttachDisk(volumeSource.VolumeID, droplet.ID)
+	if err != nil {
+		return "", err
+	}
 
-	// if not attach to node
-
-	// return mounted path
-
-	// volumeSource.VolumeID
-	//
-	// // awsCloud.AttachDisk checks if disk is already attached to node and
-	// // succeeds in that case, so no need to do that separately.
-	// devicePath, err := attacher.awsVolumes.AttachDisk(volumeID, nodeName, readOnly)
-	// if err != nil {
-	// 	glog.Errorf("Error attaching volume %q to node %q: %+v", volumeSource.VolumeID, nodeName, err)
-	// 	return "", err
-	// }
-	//
-	// return devicePath, nil
-	return "", nil
+	return devicePath, nil
 }
 
-// func (attacher *awsElasticBlockStoreAttacher) VolumesAreAttached(specs []*volume.Spec, nodeName types.NodeName) (map[*volume.Spec]bool, error) {
-//
-// 	glog.Warningf("Attacher.VolumesAreAttached called for node %q - Please use BulkVerifyVolumes for AWS", nodeName)
-// 	volumeNodeMap := map[types.NodeName][]*volume.Spec{
-// 		nodeName: specs,
-// 	}
-// 	nodeVolumesResult := make(map[*volume.Spec]bool)
-// 	nodesVerificationMap, err := attacher.BulkVerifyVolumes(volumeNodeMap)
-// 	if err != nil {
-// 		glog.Errorf("Attacher.VolumesAreAttached - error checking volumes for node %q with %v", nodeName, err)
-// 		return nodeVolumesResult, err
-// 	}
-//
-// 	if result, ok := nodesVerificationMap[nodeName]; ok {
-// 		return result, nil
-// 	}
-// 	return nodeVolumesResult, nil
-// }
+// // VolumesAreAttached checks whether the list of volumes still attached to the specified node
+func (va *doVolumeAttacher) VolumesAreAttached(specs []*volume.Spec, nodeName types.NodeName) (map[*volume.Spec]bool, error) {
+	volumesAttachedCheck := make(map[*volume.Spec]bool)
+	volumeSpecMap := make(map[string]*volume.Spec)
+	volumeIDList := []string{}
+	for _, spec := range specs {
+		volumeSource, err := getVolumeSource(spec)
+		if err != nil {
+			glog.Errorf("Error getting volume (%q) source : %v", spec.Name(), err)
+			continue
+		}
 
-// func (attacher *awsElasticBlockStoreAttacher) BulkVerifyVolumes(volumesByNode map[types.NodeName][]*volume.Spec) (map[types.NodeName]map[*volume.Spec]bool, error) {
-// 	volumesAttachedCheck := make(map[types.NodeName]map[*volume.Spec]bool)
-// 	diskNamesByNode := make(map[types.NodeName][]aws.KubernetesVolumeID)
-// 	volumeSpecMap := make(map[aws.KubernetesVolumeID]*volume.Spec)
-//
-// 	for nodeName, volumeSpecs := range volumesByNode {
-// 		for _, volumeSpec := range volumeSpecs {
-// 			volumeSource, _, err := getVolumeSource(volumeSpec)
-//
-// 			if err != nil {
-// 				glog.Errorf("Error getting volume (%q) source : %v", volumeSpec.Name(), err)
-// 				continue
-// 			}
-//
-// 			name := aws.KubernetesVolumeID(volumeSource.VolumeID)
-// 			diskNamesByNode[nodeName] = append(diskNamesByNode[nodeName], name)
-//
-// 			nodeDisk, nodeDiskExists := volumesAttachedCheck[nodeName]
-//
-// 			if !nodeDiskExists {
-// 				nodeDisk = make(map[*volume.Spec]bool)
-// 			}
-// 			nodeDisk[volumeSpec] = true
-// 			volumeSpecMap[name] = volumeSpec
-// 			volumesAttachedCheck[nodeName] = nodeDisk
-// 		}
-// 	}
-// 	attachedResult, err := attacher.awsVolumes.DisksAreAttached(diskNamesByNode)
-//
-// 	if err != nil {
-// 		glog.Errorf("Error checking if volumes are attached to nodes err = %v", err)
-// 		return volumesAttachedCheck, err
-// 	}
-//
-// 	for nodeName, nodeDisks := range attachedResult {
-// 		for diskName, attached := range nodeDisks {
-// 			if !attached {
-// 				spec := volumeSpecMap[diskName]
-// 				setNodeDisk(volumesAttachedCheck, spec, nodeName, false)
-// 			}
-// 		}
-// 	}
-//
-// 	return volumesAttachedCheck, nil
-// }
-//
-// func (attacher *awsElasticBlockStoreAttacher) WaitForAttach(spec *volume.Spec, devicePath string, timeout time.Duration) (string, error) {
-// 	volumeSource, _, err := getVolumeSource(spec)
-// 	if err != nil {
-// 		return "", err
-// 	}
-//
-// 	volumeID := volumeSource.VolumeID
-// 	partition := ""
-// 	if volumeSource.Partition != 0 {
-// 		partition = strconv.Itoa(int(volumeSource.Partition))
-// 	}
-//
-// 	if devicePath == "" {
-// 		return "", fmt.Errorf("WaitForAttach failed for AWS Volume %q: devicePath is empty.", volumeID)
-// 	}
-//
-// 	ticker := time.NewTicker(checkSleepDuration)
-// 	defer ticker.Stop()
-// 	timer := time.NewTimer(timeout)
-// 	defer timer.Stop()
-//
-// 	for {
-// 		select {
-// 		case <-ticker.C:
-// 			glog.V(5).Infof("Checking AWS Volume %q is attached.", volumeID)
-// 			if devicePath != "" {
-// 				devicePaths := getDiskByIdPaths(partition, devicePath)
-// 				path, err := verifyDevicePath(devicePaths)
-// 				if err != nil {
-// 					// Log error, if any, and continue checking periodically. See issue #11321
-// 					glog.Errorf("Error verifying AWS Volume (%q) is attached: %v", volumeID, err)
-// 				} else if path != "" {
-// 					// A device path has successfully been created for the PD
-// 					glog.Infof("Successfully found attached AWS Volume %q.", volumeID)
-// 					return path, nil
-// 				}
-// 			} else {
-// 				glog.V(5).Infof("AWS Volume (%q) is not attached yet", volumeID)
-// 			}
-// 		case <-timer.C:
-// 			return "", fmt.Errorf("Could not find attached AWS Volume %q. Timeout waiting for mount paths to be created.", volumeID)
-// 		}
-// 	}
-// }
-//
-// func (attacher *awsElasticBlockStoreAttacher) GetDeviceMountPath(
-// 	spec *volume.Spec) (string, error) {
-// 	volumeSource, _, err := getVolumeSource(spec)
-// 	if err != nil {
-// 		return "", err
-// 	}
-//
-// 	return makeGlobalPDPath(attacher.host, aws.KubernetesVolumeID(volumeSource.VolumeID)), nil
-// }
-//
-// // FIXME: this method can be further pruned.
-// func (attacher *awsElasticBlockStoreAttacher) MountDevice(spec *volume.Spec, devicePath string, deviceMountPath string) error {
-// 	mounter := attacher.host.GetMounter()
-// 	notMnt, err := mounter.IsLikelyNotMountPoint(deviceMountPath)
-// 	if err != nil {
-// 		if os.IsNotExist(err) {
-// 			if err := os.MkdirAll(deviceMountPath, 0750); err != nil {
-// 				return err
-// 			}
-// 			notMnt = true
-// 		} else {
-// 			return err
-// 		}
-// 	}
-//
-// 	volumeSource, readOnly, err := getVolumeSource(spec)
-// 	if err != nil {
-// 		return err
-// 	}
+		volumeIDList = append(volumeIDList, volumeSource.VolumeID)
+		volumesAttachedCheck[spec] = true
+		volumeSpecMap[volumeSource.VolumeID] = spec
+	}
+
+	droplet, err := va.findDroplet(string(nodeName))
+	if err != nil {
+		return nil, err
+	}
+
+	attachedResult, err := va.manager.DisksAreAttached(volumeIDList, droplet.ID)
+	if err != nil {
+		// Log error and continue with attach
+		glog.Errorf(
+			"Error checking if volumes (%v) are attached to current node (%q). err=%v",
+			volumeIDList, nodeName, err)
+		return volumesAttachedCheck, err
+	}
+
+	for volumeID, attached := range attachedResult {
+		if !attached {
+			spec := volumeSpecMap[volumeID]
+			volumesAttachedCheck[spec] = false
+			glog.V(2).Infof("VolumesAreAttached: check volume %q (specName: %q) is no longer attached", volumeID, spec.Name())
+		}
+	}
+	return volumesAttachedCheck, nil
+}
+
+// // WaitForAttach blocks until the device is attached to this node
+func (va *doVolumeAttacher) WaitForAttach(spec *volume.Spec, devicePath string, timeout time.Duration) (string, error) {
+	volumeSource, err := getVolumeSource(spec)
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(devicePath) == 0 {
+		return "", fmt.Errorf("WaitForAttach failed for Digital Ocean volume %q: devicePath is empty.",
+			volumeSource.VolumeID)
+	}
+
+	ticker := time.NewTicker(checkSleepDuration)
+	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			glog.V(5).Infof("Checking if Digital Ocean Volume %q is attached.", volumeSource.VolumeID)
+
+			if pathExists, err := volumeutil.PathExists(devicePath); err != nil {
+				return "", fmt.Errorf("Error checking if path exists: %v", err)
+			} else if pathExists {
+				glog.Infof("Successfully found attached Digital Ocean Volume %q.", volumeSource.VolumeID)
+				return devicePath, nil
+			}
+			glog.V(5).Infof("Digital Ocean Volume (%q) is not attached yet", volumeSource.VolumeID)
+		case <-timer.C:
+			return "", fmt.Errorf("Could not find attached Digital Ocean Volume %q. Timeout waiting for mount paths to be created.", volumeSource.VolumeID)
+		}
+	}
+}
+
+// GetDeviceMountPath returns a path where the device should
+// be mounted after it is attached. This is a global mount
+// point which should be bind mounted for individual volumes.
+func (va *doVolumeAttacher) GetDeviceMountPath(spec *volume.Spec) (string, error) {
+	volumeSource, err := getVolumeSource(spec)
+	if err != nil {
+		return "", err
+	}
+	return makeGlobalPDPath(va.host, volumeSource.VolumeID), nil
+}
+
+// // MountDevice mounts the disk to a global path which
+func (va *doVolumeAttacher) MountDevice(spec *volume.Spec, devicePath string, deviceMountPath string) error {
+	mounter := va.host.GetMounter()
+
+	notMnt, err := mounter.IsLikelyNotMountPoint(deviceMountPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(deviceMountPath, 0750); err != nil {
+				return err
+			}
+			notMnt = true
+		} else {
+			return err
+		}
+	}
+
+	volumeSource, err := getVolumeSource(spec)
+	if err != nil {
+		return err
+	}
+
+	if notMnt {
+		diskMounter := &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()}
+		mountOptions := volume.MountOptionFromSpec(spec)
+		err = diskMounter.FormatAndMount(devicePath, deviceMountPath, volumeSource.FSType, mountOptions)
+		if err != nil {
+			os.Remove(deviceMountPath)
+			return err
+		}
+	}
+
+	return nil
+}
+
 //
 // 	options := []string{}
 // 	if readOnly {
@@ -299,29 +259,33 @@ type doVolumeDetacher struct {
 // 	volumeMap[volumeSpec] = check
 // }
 
-func (va *doVolumeAttacher) findDroplet(nodeName types.NodeName) (*godo.Droplet, error) {
+func (va *doVolumeAttacher) findDroplet(nodeName string) (*godo.Droplet, error) {
 
 	// try to find droplet with same name as the kubernetes node
 	droplets, err := va.manager.DropletList()
 
 	for _, droplet := range droplets {
 		if droplet.Name == nodeName {
-			return droplet, nil
+			return &droplet, nil
 		}
 	}
 
 	// if not found, look for other kubernetes properties
 	// Internal IP seems to be our safest bet when names doesn't match
 	node, err := va.nodeFromName(nodeName)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, droplet := range droplets {
 		for _, address := range node.Status.Addresses {
 			if address.Type == v1.NodeInternalIP {
-				ip, err = droplet.PrivateIPv4()
+				ip, err := droplet.PrivateIPv4()
 				if err != nil {
 					return nil, err
 				}
 				if ip == address.Address {
-					return droplet
+					return &droplet, nil
 				}
 			}
 		}
@@ -331,14 +295,14 @@ func (va *doVolumeAttacher) findDroplet(nodeName types.NodeName) (*godo.Droplet,
 }
 
 // nodeNametoDroplet takes a node name and returns the droplet
-func (va *doVolumeAttacher) nodeFromName(nodeName types.NodeName) (*v1.Node, error) {
+func (va *doVolumeAttacher) nodeFromName(nodeName string) (*v1.Node, error) {
 
 	kubeClient := va.host.GetKubeClient()
-	if err != nil {
-		return nil, err
+	if kubeClient == nil {
+		return nil, fmt.Errorf("Cannot get kube client")
 	}
 
-	node, err = kubeClient.Core().Nodes().Get(node.Name, metav1.GetOptions{})
+	node, err := kubeClient.Core().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

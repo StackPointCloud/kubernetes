@@ -46,7 +46,7 @@ type doVolume struct {
 	volumeID string
 	mounter  mount.Interface
 	plugin   *doVolumePlugin
-	manager  *DOManager
+	manager  *doManager
 	volume.MetricsNil
 }
 
@@ -209,7 +209,7 @@ func (vp *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 	volumeID, err := vp.manager.CreateVolume(name, description, sizeGB)
 	if err != nil {
 		glog.V(2).Infof("Error creating Digital Ocean volume: %v", err)
-		return err
+		return nil, err
 	}
 
 	pv := &v1.PersistentVolume{

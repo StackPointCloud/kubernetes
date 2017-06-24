@@ -129,42 +129,34 @@ func (plugin *doVolumePlugin) NewUnmounter(volName string, podUID types.UID) (vo
 
 // NewDeleter creates a new volume.Deleter which knows how to delete this resource
 func (plugin *doVolumePlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, error) {
-	config, e := plugin.getDOToken()
-	if e != nil {
-		return nil, e
+	manager, err := plugin.createManager()
+	if err != nil {
+		return nil, err
 	}
-	manager = NewDOManager(config)
-
 	return plugin.newDeleterInternal(spec, manager)
 }
 
 func (plugin *doVolumePlugin) NewProvisioner(options volume.VolumeOptions) (volume.Provisioner, error) {
-	config, err := plugin.getDOToken()
+	manager, err := plugin.createManager()
 	if err != nil {
 		return nil, err
 	}
-	manager = NewDOManager(config)
-
-	return plugin.newProvisionerInternal(spec, manager)
+	return plugin.newProvisionerInternal(options, manager)
 }
 
 func (plugin *doVolumePlugin) NewAttacher() (volume.Attacher, error) {
-	config, err := plugin.getDOToken()
+	manager, err := plugin.createManager()
 	if err != nil {
 		return nil, err
 	}
-	manager = NewDOManager(config)
-
 	return plugin.newAttacherInternal(manager)
 }
 
 func (plugin *doVolumePlugin) NewDetacher() (volume.Detacher, error) {
-	config, err := plugin.getDOToken()
+	manager, err := plugin.createManager()
 	if err != nil {
 		return nil, err
 	}
-	manager = NewDOManager(config)
-
 	return plugin.newDetacherInternal(manager)
 }
 
@@ -180,7 +172,7 @@ func (plugin *doVolumePlugin) newAttacherInternal(manager *doManager) (volume.At
 	}, nil
 }
 
-func (plugin *doVolumePlugin) newDetacherInternal(manager *doManager) (volume.Attacher, error) {
+func (plugin *doVolumePlugin) newDetacherInternal(manager *doManager) (volume.Detacher, error) {
 	return &doVolumeDetacher{
 		host:    plugin.host,
 		manager: manager,
@@ -197,7 +189,7 @@ func (plugin *doVolumePlugin) newProvisionerInternal(options volume.VolumeOption
 	}, nil
 }
 
-func (plugin *doVolumePlugin) newMDeleterInternal(spec *volume.Spec, manager *doManager) (volume.Deleter, error) {
+func (plugin *doVolumePlugin) newDeleterInternal(spec *volume.Spec, manager *doManager) (volume.Deleter, error) {
 	vol, err := getVolumeSource(spec)
 	if err != nil {
 		return nil, err
@@ -218,7 +210,7 @@ func (plugin *doVolumePlugin) newMounterInternal(spec *volume.Spec, podUID types
 		return nil, err
 	}
 
-	fsType = vol.FSType
+	fsType := vol.FSType
 	readOnly := vol.ReadOnly
 	volID := vol.VolumeID
 
@@ -247,21 +239,23 @@ func (plugin *doVolumePlugin) newUnmounterInternal(volName string, podUID types.
 	}, nil
 }
 
-func (plugin *doVolumePlugin) getDOToken() (*DOManagerConfig, error) {
+func (plugin *doVolumePlugin) getDOToken() (*doManagerConfig, error) {
 	secretMap, err := util.GetSecretForPV(secretNamespace, secretName, doVolumePluginName, plugin.host.GetKubeClient())
 	if err != nil {
 		return nil, err
 	}
 
-	if token, ok = secretMap[secretToken]; !ok {
+	token, ok := secretMap[secretToken]
+	if !ok {
 		return nil, fmt.Errorf("Missing \"%s\" in secret %s/%s", secretToken, secretNamespace, secretName)
 	}
 
-	if region, ok = secretMap[secretRegion]; !ok {
+	region, ok := secretMap[secretRegion]
+	if !ok {
 		return nil, fmt.Errorf("Missing \"%s\" in secret %s/%s", secretRegion, secretNamespace, secretName)
 	}
 
-	return &DOManagerConfig{
+	return &doManagerConfig{
 		token:  token,
 		region: region,
 	}, nil
@@ -277,4 +271,12 @@ func getVolumeSource(spec *volume.Spec) (*v1.DOVolumeSource, error) {
 	}
 
 	return nil, fmt.Errorf("Spec does not reference a Digital Ocean disk volume type")
+}
+
+func (plugin *doVolumePlugin) createManager() (*doManager, error) {
+	config, err := plugin.getDOToken()
+	if err != nil {
+		return nil, err
+	}
+	return newDOManager(config)
 }

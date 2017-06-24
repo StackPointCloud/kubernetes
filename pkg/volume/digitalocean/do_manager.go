@@ -29,18 +29,14 @@ import (
 
 const (
 	volumeAttachmentStatusConsecutiveErrorLimit = 10
-	// waiting for attach/detach operation to complete. Starting with 10
-	// seconds, multiplying by 1.2 with each step and taking 21 steps at maximum
-	// it will time out after 31.11 minutes, which roughly corresponds to GCE
-	// timeout (30 minutes).
-	genericWaitTimeDelay         = 10 * time.Second
-	volumeAttachmentStatusFactor = 1.2
-	volumeAttachmentStatusSteps  = 21
+	volumeAttachmentStatusInitialDelay          = 10 * time.Second
+	volumeAttachmentStatusFactor                = 1.2
+	volumeAttachmentStatusSteps                 = 20
 )
 
 // DOManager communicates with the DO API
 type doManager struct {
-	config  *DOManagerConfig
+	config  *doManagerConfig
 	client  *godo.Client
 	context context.Context
 }
@@ -65,21 +61,23 @@ func (t *TokenSource) Token() (*oauth2.Token, error) {
 }
 
 // NewDOManager returns a Digitial Ocean manager
-func NewDOManager(token string) (*DOManager, error) {
-	do := &doManager{}
+func newDOManager(config *doManagerConfig) (*doManager, error) {
+	do := &doManager{
+		config: config,
+	}
 	// generate client and test retrieving account info
 	_, err := do.GetAccount()
 	if err != nil {
 		return nil, err
 	}
-	return do
+	return do, nil
 }
 
 // refreshDOClient will update the Digital Ocean client if it is not
 // already cached
 func (m *doManager) refreshDOClient() error {
 	if m.context != nil && m.client != nil {
-		return
+		return nil
 	}
 	if m.config.token == "" {
 		return fmt.Errorf("DOManager needs to be initialized with a token")
@@ -89,11 +87,13 @@ func (m *doManager) refreshDOClient() error {
 	}
 
 	tokenSource := &TokenSource{
-		AccessToken: m.token,
+		AccessToken: m.config.token,
 	}
 	m.context = context.Background()
 	oauthClient := oauth2.NewClient(m.context, tokenSource)
 	m.client = godo.NewClient(oauthClient)
+
+	return nil
 }
 
 // removeDOClient will remove the cached Digital Ocean client
@@ -105,7 +105,7 @@ func (m *doManager) removeDOClient() {
 // GetAccount returns the token related account
 func (m *doManager) GetAccount() (*godo.Account, error) {
 	m.refreshDOClient()
-	account, _, err := m.client.Account.Get(m.ctx)
+	account, _, err := m.client.Account.Get(m.context)
 	if err != nil {
 		m.removeDOClient()
 		return nil, err
@@ -117,7 +117,7 @@ func (m *doManager) GetAccount() (*godo.Account, error) {
 // GetDroplet retrieves the droplet by ID
 func (m *doManager) GetDroplet(dropletID int) (*godo.Droplet, error) {
 	m.refreshDOClient()
-	droplet, _, err := m.client.Droplets.Get(m.ctx, dropletID)
+	droplet, _, err := m.client.Droplets.Get(m.context, dropletID)
 	if err != nil {
 		m.removeDOClient()
 		return nil, err
@@ -130,7 +130,7 @@ func (m *doManager) DropletList() ([]godo.Droplet, error) {
 	list := []godo.Droplet{}
 	opt := &godo.ListOptions{}
 	for {
-		droplets, resp, err := m.client.Droplets.List(m.ctx, opt)
+		droplets, resp, err := m.client.Droplets.List(m.context, opt)
 		if err != nil {
 			m.removeDOClient()
 			return nil, err
@@ -152,7 +152,7 @@ func (m *doManager) DropletList() ([]godo.Droplet, error) {
 }
 
 func (m *doManager) GetVolume(volumeID string) (*godo.Volume, error) {
-	vol, _, err := m.client.Storage.GetVolume(m.ctx, ID)
+	vol, _, err := m.client.Storage.GetVolume(m.context, volumeID)
 	if err != nil {
 		m.removeDOClient()
 		return nil, err
@@ -163,7 +163,7 @@ func (m *doManager) GetVolume(volumeID string) (*godo.Volume, error) {
 // DeleteVolume deletes a Digital Ocean volume
 func (m *doManager) DeleteVolume(volumeID string) error {
 	m.refreshDOClient()
-	_, err := m.client.Storage.DeleteVolume(m.ctx, volumeID)
+	_, err := m.client.Storage.DeleteVolume(m.context, volumeID)
 	if err != nil {
 		m.removeDOClient()
 		return err
@@ -179,13 +179,13 @@ func (m *doManager) CreateVolume(name, description string, sizeGB int) (string, 
 		Region:        m.config.region,
 		Name:          name,
 		Description:   description,
-		SizeGigaBytes: sizeGB,
+		SizeGigaBytes: int64(sizeGB),
 	}
 
-	vol, _, err := m.client.Storage.CreateVolume(m.ctx, req)
+	vol, _, err := m.client.Storage.CreateVolume(m.context, req)
 	if err != nil {
 		m.removeDOClient()
-		return "", 0, err
+		return "", err
 	}
 
 	return vol.ID, nil
@@ -193,7 +193,7 @@ func (m *doManager) CreateVolume(name, description string, sizeGB int) (string, 
 
 // AttachDisk attaches disk to given node
 // returns the path the disk is being attached to
-func (m *doManager) AttachDisk(volumeID string, dropletID, readOnly bool) (string, error) {
+func (m *doManager) AttachDisk(volumeID string, dropletID int) (string, error) {
 	vol, err := m.GetVolume(volumeID)
 	if err != nil {
 		m.removeDOClient()
@@ -208,12 +208,12 @@ func (m *doManager) AttachDisk(volumeID string, dropletID, readOnly bool) (strin
 	}
 
 	if needAttach {
-		action, _, err := m.client.StorageActions.Attach(m.ctx, volumeID, dropletID)
+		action, _, err := m.client.StorageActions.Attach(m.context, volumeID, dropletID)
 		if err != nil {
 			return "", err
 		}
 		glog.V(2).Infof("AttachVolume volume=%q droplet=%q requested")
-		err := m.WaitForVolumeAttach(volumeID, action.ID)
+		err = m.WaitForVolumeAttach(volumeID, action.ID)
 		if err != nil {
 			return "", err
 		}
@@ -222,7 +222,7 @@ func (m *doManager) AttachDisk(volumeID string, dropletID, readOnly bool) (strin
 }
 
 func (m *doManager) GetVolumeAction(volumeID string, actionID int) (*godo.Action, error) {
-	action, _, err := m.client.StorageActions.Get(m.ctx, volumeID, actionID)
+	action, _, err := m.client.StorageActions.Get(m.context, volumeID, actionID)
 	if err != nil {
 		m.removeDOClient()
 		return nil, err
@@ -230,7 +230,7 @@ func (m *doManager) GetVolumeAction(volumeID string, actionID int) (*godo.Action
 	return action, nil
 }
 
-func (m *doManager) WaitForVolumeAttach(volumeID, actionID) error {
+func (m *doManager) WaitForVolumeAttach(volumeID string, actionID int) error {
 	backoff := wait.Backoff{
 		Duration: volumeAttachmentStatusInitialDelay,
 		Factor:   volumeAttachmentStatusFactor,
@@ -244,13 +244,11 @@ func (m *doManager) WaitForVolumeAttach(volumeID, actionID) error {
 			errorCount++
 			if errorCount > volumeAttachmentStatusConsecutiveErrorLimit {
 				return false, e
-			} else {
-				glog.Warningf("Ignoring error from get volume action; will retry: %q", e)
-				return false, nil
 			}
-		} else {
-			errorCount = 0
+			glog.Warningf("Ignoring error from get volume action; will retry: %q", e)
+			return false, nil
 		}
+		errorCount = 0
 
 		if action.Status != godo.ActionCompleted {
 			glog.V(2).Infof("Waiting for volume %q state: actual=%s, desired=%s",
@@ -261,4 +259,26 @@ func (m *doManager) WaitForVolumeAttach(volumeID, actionID) error {
 		return true, nil
 	})
 	return err
+}
+
+// DisksAreAttached checks if a list of volumes are attached to the node with the specified NodeName
+func (m *doManager) DisksAreAttached(volumeIDs []string, dropletID int) (map[string]bool, error) {
+	attached := make(map[string]bool)
+	for _, volumeID := range volumeIDs {
+		attached[volumeID] = false
+	}
+	droplet, err := m.GetDroplet(dropletID)
+	if err != nil {
+		return attached, err
+	}
+
+	for _, attachedID := range droplet.VolumeIDs {
+		for _, expectedID := range volumeIDs {
+			if attachedID == expectedID {
+				attached[attachedID] = true
+			}
+		}
+	}
+
+	return attached, nil
 }
