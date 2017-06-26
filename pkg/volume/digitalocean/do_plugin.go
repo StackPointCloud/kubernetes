@@ -160,6 +160,14 @@ func (plugin *doVolumePlugin) NewDetacher() (volume.Detacher, error) {
 	return plugin.newDetacherInternal(manager)
 }
 
+func (plugin *doVolumePlugin) newDetacherInternal(manager *doManager) (volume.Detacher, error) {
+	return &doVolumeDetacher{
+		host:    plugin.host,
+		mounter: plugin.host.GetMounter(),
+		manager: manager,
+	}, nil
+}
+
 func (plugin *doVolumePlugin) GetDeviceMountRefs(deviceMountPath string) ([]string, error) {
 	mounter := plugin.host.GetMounter()
 	return mount.GetMountRefs(mounter, deviceMountPath)
@@ -167,13 +175,6 @@ func (plugin *doVolumePlugin) GetDeviceMountRefs(deviceMountPath string) ([]stri
 
 func (plugin *doVolumePlugin) newAttacherInternal(manager *doManager) (volume.Attacher, error) {
 	return &doVolumeAttacher{
-		host:    plugin.host,
-		manager: manager,
-	}, nil
-}
-
-func (plugin *doVolumePlugin) newDetacherInternal(manager *doManager) (volume.Detacher, error) {
-	return &doVolumeDetacher{
 		host:    plugin.host,
 		manager: manager,
 	}, nil
@@ -259,18 +260,6 @@ func (plugin *doVolumePlugin) getDOToken() (*doManagerConfig, error) {
 		token:  token,
 		region: region,
 	}, nil
-}
-
-func getVolumeSource(spec *volume.Spec) (*v1.DOVolumeSource, error) {
-	if spec.Volume != nil && spec.Volume.DOVolume != nil {
-		return spec.Volume.DOVolume, nil
-	}
-	if spec.PersistentVolume != nil &&
-		spec.PersistentVolume.Spec.DOVolume != nil {
-		return spec.PersistentVolume.Spec.DOVolume, nil
-	}
-
-	return nil, fmt.Errorf("Spec does not reference a Digital Ocean disk volume type")
 }
 
 func (plugin *doVolumePlugin) createManager() (*doManager, error) {
