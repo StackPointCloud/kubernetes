@@ -193,28 +193,43 @@ func (va *doVolumeAttacher) MountDevice(spec *volume.Spec, devicePath string, de
 	return nil
 }
 
-//
-// 	options := []string{}
-// 	if readOnly {
-// 		options = append(options, "ro")
-// 	}
-// 	if notMnt {
-// 		diskMounter := &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()}
-// 		mountOptions := volume.MountOptionFromSpec(spec, options...)
-// 		err = diskMounter.FormatAndMount(devicePath, deviceMountPath, volumeSource.FSType, mountOptions)
-// 		if err != nil {
-// 			os.Remove(deviceMountPath)
-// 			return err
-// 		}
-// 	}
-// 	return nil
-// }
-
 type doVolumeDetacher struct {
-	host     volume.VolumeHost
+	mounter  mount.Interface
 	doVolume doVolume
-	// mounter    mount.Interface
-	// awsVolumes aws.Volumes
+}
+
+// Detach the given device from the node with the given Name.
+func (vd *doVolumeDetacher) Detach(deviceName string, nodeName types.NodeName) error {
+
+	// if diskName == "" {
+	//   return fmt.Errorf("invalid disk to detach: %q", diskName)
+	// }
+	// instanceid, err := detacher.azureProvider.InstanceID(nodeName)
+	// if err != nil {
+	//   glog.Warningf("no instance id for node %q, skip detaching", nodeName)
+	//   return nil
+	// }
+	// if ind := strings.LastIndex(instanceid, "/"); ind >= 0 {
+	//   instanceid = instanceid[(ind + 1):]
+	// }
+	//
+	// glog.V(4).Infof("detach %v from node %q", diskName, nodeName)
+	// err = detacher.azureProvider.DetachDiskByName(diskName, "" /* diskURI */, nodeName)
+	// if err != nil {
+	//   glog.Errorf("failed to detach azure disk %q, err %v", diskName, err)
+	// }
+	//
+	// return err
+
+	// check if disk attached
+	// not attached, log and return
+	// detach
+	return nil
+}
+
+// UnmountDevice unmounts the global mount of the disk.
+func (vd *doVolumeDetacher) UnmountDevice(deviceMountPath string) error {
+	return volumeutil.UnmountPath(deviceMountPath, vd.mounter)
 }
 
 // func (detacher *awsElasticBlockStoreDetacher) Detach(deviceMountPath string, nodeName types.NodeName) error {
@@ -241,23 +256,6 @@ type doVolumeDetacher struct {
 // 	return nil
 // }
 //
-// func (detacher *awsElasticBlockStoreDetacher) UnmountDevice(deviceMountPath string) error {
-// 	return volumeutil.UnmountPath(deviceMountPath, detacher.mounter)
-// }
-//
-// func setNodeDisk(
-// 	nodeDiskMap map[types.NodeName]map[*volume.Spec]bool,
-// 	volumeSpec *volume.Spec,
-// 	nodeName types.NodeName,
-// 	check bool) {
-//
-// 	volumeMap := nodeDiskMap[nodeName]
-// 	if volumeMap == nil {
-// 		volumeMap = make(map[*volume.Spec]bool)
-// 		nodeDiskMap[nodeName] = volumeMap
-// 	}
-// 	volumeMap[volumeSpec] = check
-// }
 
 func (va *doVolumeAttacher) findDroplet(nodeName string) (*godo.Droplet, error) {
 
