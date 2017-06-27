@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/volume/cephfs"
 	"k8s.io/kubernetes/pkg/volume/cinder"
 	"k8s.io/kubernetes/pkg/volume/configmap"
+	"k8s.io/kubernetes/pkg/volume/digitalocean"
 	"k8s.io/kubernetes/pkg/volume/downwardapi"
 	"k8s.io/kubernetes/pkg/volume/empty_dir"
 	"k8s.io/kubernetes/pkg/volume/fc"
@@ -94,6 +95,7 @@ func ProbeVolumePlugins(pluginDir string) []volume.VolumePlugin {
 	allPlugins = append(allPlugins, projected.ProbeVolumePlugins()...)
 	allPlugins = append(allPlugins, portworx.ProbeVolumePlugins()...)
 	allPlugins = append(allPlugins, scaleio.ProbeVolumePlugins()...)
+	allPlugins = append(allPlugins, digitalocean.ProbeVolumePlugins()...)
 	return allPlugins
 }
 

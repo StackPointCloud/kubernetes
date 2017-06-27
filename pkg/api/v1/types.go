@@ -334,6 +334,9 @@ type VolumeSource struct {
 	// ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
 	// +optional
 	ScaleIO *ScaleIOVolumeSource `json:"scaleIO,omitempty" protobuf:"bytes,25,opt,name=scaleIO"`
+	// DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.
+	// +optional
+	DOVolume *DOVolumeSource `json:"doVolume,omitempty" protobuf:"bytes,27,opt,name=doVolume"`	
 }
 
 // PersistentVolumeClaimVolumeSource references the user's PVC in the same namespace.
@@ -425,6 +428,9 @@ type PersistentVolumeSource struct {
 	// ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
 	// +optional
 	ScaleIO *ScaleIOVolumeSource `json:"scaleIO,omitempty" protobuf:"bytes,19,opt,name=scaleIO"`
+	// DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.
+	// +optional
+	DOVolume *DOVolumeSource `json:"doVolume,omitempty" protobuf:"bytes,20,opt,name=doVolume"`
 }
 
 const (
@@ -1177,6 +1183,20 @@ type ScaleIOVolumeSource struct {
 	// the ReadOnly setting in VolumeMounts.
 	// +optional
 	ReadOnly bool `json:"readOnly,omitempty" protobuf:"varint,10,opt,name=readOnly"`
+}
+
+// DOVolumeSource represents a Volume resource in Digital Ocean.
+type DOVolumeSource struct {
+	// Unique ID for the volume resource at Digital Ocean.
+	VolumeID string `json:"volumeID" protobuf:"bytes,1,opt,name=volumeID"`
+	// FSType represents the filesystem type to mount
+	// Must be a filesystem type supported by the host operating system.
+	// Ex. "ext4", "xfs". Implicitly inferred to be "ext4" if unspecified.
+	FSType string `json:"fsType,omitempty" protobuf:"bytes,2,opt,name=fsType"`
+	// Defaults to false (read/write). ReadOnly here will force
+	// the ReadOnly setting in VolumeMounts.
+	// +optional
+	ReadOnly bool `json:"readOnly,omitempty" protobuf:"varint,3,opt,name=readOnly"`
 }
 
 // Adapts a ConfigMap into a volume.

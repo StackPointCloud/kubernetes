@@ -302,6 +302,9 @@ type VolumeSource struct {
 	// ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
 	// +optional
 	ScaleIO *ScaleIOVolumeSource
+	// DOBLock represents a Digital Ocean volume attached and mounted on Kubernetes nodes.
+	// +optional
+	DOVolume *DOVolumeSource
 }
 
 // Similar to VolumeSource but meant for the administrator who creates PVs.
@@ -370,6 +373,9 @@ type PersistentVolumeSource struct {
 	// ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
 	// +optional
 	ScaleIO *ScaleIOVolumeSource
+	// DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.
+	// +optional
+	DOVolume *DOVolumeSource
 }
 
 type PersistentVolumeClaimVolumeSource struct {
@@ -1090,6 +1096,20 @@ type ScaleIOVolumeSource struct {
 	// Must be a filesystem type supported by the host operating system.
 	// Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
 	// +optional
+	FSType string
+	// Defaults to false (read/write). ReadOnly here will force
+	// the ReadOnly setting in VolumeMounts.
+	// +optional
+	ReadOnly bool
+}
+
+// DOVolumeSource represents a Block Volume resource in Digital Ocean.
+type DOVolumeSource struct {
+	// Unique ID for the volume resource at Digital Ocean.
+	VolumeID string
+	// FSType represents the filesystem type to mount
+	// Must be a filesystem type supported by the host operating system.
+	// Ex. "ext4", "xfs". Implicitly inferred to be "ext4" if unspecified.
 	FSType string
 	// Defaults to false (read/write). ReadOnly here will force
 	// the ReadOnly setting in VolumeMounts.
