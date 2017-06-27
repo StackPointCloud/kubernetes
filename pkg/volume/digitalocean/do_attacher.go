@@ -21,11 +21,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/digitalocean/godo"
 	"github.com/golang/glog"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
@@ -51,7 +48,12 @@ func (va *doVolumeAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (
 		return "", err
 	}
 
-	found, err := va.findDroplet(string(nodeName))
+	node, err := nodeFromName(va.host, nodeName)
+	if err != nil {
+		return "", err
+	}
+
+	found, err := va.manager.FindDropletForNode(node)
 	if err != nil {
 		return "", err
 	}
@@ -88,7 +90,12 @@ func (va *doVolumeAttacher) VolumesAreAttached(specs []*volume.Spec, nodeName ty
 		volumeSpecMap[volumeSource.VolumeID] = spec
 	}
 
-	droplet, err := va.findDroplet(string(nodeName))
+	node, err := nodeFromName(va.host, nodeName)
+	if err != nil {
+		return nil, err
+	}
+
+	droplet, err := va.manager.FindDropletForNode(node)
 	if err != nil {
 		return nil, err
 	}
@@ -194,116 +201,41 @@ func (va *doVolumeAttacher) MountDevice(spec *volume.Spec, devicePath string, de
 }
 
 type doVolumeDetacher struct {
-	mounter  mount.Interface
-	doVolume doVolume
+	host    volume.VolumeHost
+	mounter mount.Interface
+	manager *doManager
 }
 
+var _ volume.Detacher = &doVolumeDetacher{}
+
 // Detach the given device from the node with the given Name.
-func (vd *doVolumeDetacher) Detach(deviceName string, nodeName types.NodeName) error {
+func (vd *doVolumeDetacher) Detach(volumeName string, nodeName types.NodeName) error {
 
-	// if diskName == "" {
-	//   return fmt.Errorf("invalid disk to detach: %q", diskName)
-	// }
-	// instanceid, err := detacher.azureProvider.InstanceID(nodeName)
-	// if err != nil {
-	//   glog.Warningf("no instance id for node %q, skip detaching", nodeName)
-	//   return nil
-	// }
-	// if ind := strings.LastIndex(instanceid, "/"); ind >= 0 {
-	//   instanceid = instanceid[(ind + 1):]
-	// }
-	//
-	// glog.V(4).Infof("detach %v from node %q", diskName, nodeName)
-	// err = detacher.azureProvider.DetachDiskByName(diskName, "" /* diskURI */, nodeName)
-	// if err != nil {
-	//   glog.Errorf("failed to detach azure disk %q, err %v", diskName, err)
-	// }
-	//
-	// return err
+	if volumeName == "" {
+		return fmt.Errorf("Cannot detach empty volume name")
+	}
 
-	// check if disk attached
-	// not attached, log and return
-	// detach
+	node, err := nodeFromName(vd.host, nodeName)
+	if err != nil {
+		glog.Warningf("couln't find the kubernetes node by name %q, skip detaching", nodeName)
+		return err
+	}
+
+	droplet, err := vd.manager.FindDropletForNode(node)
+	if err != nil {
+		glog.Warningf("no droplet id for node %q, skip detaching", nodeName)
+		return err
+	}
+
+	glog.V(4).Infof("detaching %v from node %q", volumeName, nodeName)
+	if err = vd.manager.DetachVolumeByName(volumeName, droplet.ID); err != nil {
+		glog.Errorf("failed to detach azure disk %q, err %v", volumeName, err)
+	}
+
 	return nil
 }
 
 // UnmountDevice unmounts the global mount of the disk.
 func (vd *doVolumeDetacher) UnmountDevice(deviceMountPath string) error {
 	return volumeutil.UnmountPath(deviceMountPath, vd.mounter)
-}
-
-// func (detacher *awsElasticBlockStoreDetacher) Detach(deviceMountPath string, nodeName types.NodeName) error {
-// 	volumeID := aws.KubernetesVolumeID(path.Base(deviceMountPath))
-//
-// 	attached, err := detacher.awsVolumes.DiskIsAttached(volumeID, nodeName)
-// 	if err != nil {
-// 		// Log error and continue with detach
-// 		glog.Errorf(
-// 			"Error checking if volume (%q) is already attached to current node (%q). Will continue and try detach anyway. err=%v",
-// 			volumeID, nodeName, err)
-// 	}
-//
-// 	if err == nil && !attached {
-// 		// Volume is already detached from node.
-// 		glog.Infof("detach operation was successful. volume %q is already detached from node %q.", volumeID, nodeName)
-// 		return nil
-// 	}
-//
-// 	if _, err = detacher.awsVolumes.DetachDisk(volumeID, nodeName); err != nil {
-// 		glog.Errorf("Error detaching volumeID %q: %v", volumeID, err)
-// 		return err
-// 	}
-// 	return nil
-// }
-//
-
-func (va *doVolumeAttacher) findDroplet(nodeName string) (*godo.Droplet, error) {
-
-	// try to find droplet with same name as the kubernetes node
-	droplets, err := va.manager.DropletList()
-
-	for _, droplet := range droplets {
-		if droplet.Name == nodeName {
-			return &droplet, nil
-		}
-	}
-
-	// if not found, look for other kubernetes properties
-	// Internal IP seems to be our safest bet when names doesn't match
-	node, err := va.nodeFromName(nodeName)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, droplet := range droplets {
-		for _, address := range node.Status.Addresses {
-			if address.Type == v1.NodeInternalIP {
-				ip, err := droplet.PrivateIPv4()
-				if err != nil {
-					return nil, err
-				}
-				if ip == address.Address {
-					return &droplet, nil
-				}
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("Couldn't match droplet name to node name, nor droplet private ip to node internal ip")
-}
-
-// nodeNametoDroplet takes a node name and returns the droplet
-func (va *doVolumeAttacher) nodeFromName(nodeName string) (*v1.Node, error) {
-
-	kubeClient := va.host.GetKubeClient()
-	if kubeClient == nil {
-		return nil, fmt.Errorf("Cannot get kube client")
-	}
-
-	node, err := kubeClient.Core().Nodes().Get(nodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	return node, nil
 }

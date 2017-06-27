@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 const (
@@ -191,7 +192,7 @@ func (m *doManager) CreateVolume(name, description string, sizeGB int) (string, 
 	return vol.ID, nil
 }
 
-// AttachDisk attaches disk to given node
+// AttachDisk attaches disk to given droplet
 // returns the path the disk is being attached to
 func (m *doManager) AttachDisk(volumeID string, dropletID int) (string, error) {
 	vol, err := m.GetVolume(volumeID)
@@ -219,6 +220,32 @@ func (m *doManager) AttachDisk(volumeID string, dropletID int) (string, error) {
 		}
 	}
 	return "/dev/disk/by-id/scsi-0DO" + vol.Name, nil
+}
+
+// DetachDisk detaches a disk to given droplet
+func (m *doManager) DetachVolume(volumeID string, dropletID int) error {
+	_, _, err := m.client.StorageActions.DetachByDropletID(m.context, volumeID, dropletID)
+	return err
+}
+
+// DetachDisk detaches a disk to given droplet
+func (m *doManager) DetachVolumeByName(volumeName string, dropletID int) error {
+
+	droplet, err := m.GetDroplet(dropletID)
+	if err != nil {
+		return err
+	}
+
+	for _, volumeID := range droplet.VolumeIDs {
+		vol, err := m.GetVolume(volumeID)
+		if err != nil {
+			return err
+		}
+		if vol.Name == volumeName {
+			return m.DetachVolume(volumeID, dropletID)
+		}
+	}
+	return fmt.Errorf("Detach failed. Couldn't find Digital Ocean volume named %q", volumeName)
 }
 
 func (m *doManager) GetVolumeAction(volumeID string, actionID int) (*godo.Action, error) {
@@ -281,4 +308,37 @@ func (m *doManager) DisksAreAttached(volumeIDs []string, dropletID int) (map[str
 	}
 
 	return attached, nil
+}
+
+func (m *doManager) FindDropletForNode(node *v1.Node) (*godo.Droplet, error) {
+
+	// try to find droplet with same name as the kubernetes node
+	droplets, err := m.DropletList()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, droplet := range droplets {
+		if droplet.Name == node.Name {
+			return &droplet, nil
+		}
+	}
+
+	// if not found, look for other kubernetes properties
+	// Internal IP seems to be our safest bet when names doesn't match
+	for _, droplet := range droplets {
+		for _, address := range node.Status.Addresses {
+			if address.Type == v1.NodeInternalIP {
+				ip, err := droplet.PrivateIPv4()
+				if err != nil {
+					return nil, err
+				}
+				if ip == address.Address {
+					return &droplet, nil
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("Couldn't match droplet name to node name, nor droplet private ip to node internal ip")
 }
