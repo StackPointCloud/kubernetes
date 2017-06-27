@@ -2864,6 +2864,11 @@
 		{
 			"ImportPath": "vbom.ml/util/sortorder",
 			"Rev": "db5cfe13f5cc80a4990d98e2e1b0707a4d1a5394"
+		},
+		{
+			"ImportPath": "github.com/digitalocean/godo",
+			"Rev": "4fa9e9d999007b447089056a1c581b5594f0f851"
 		}
+
 	]
 }
