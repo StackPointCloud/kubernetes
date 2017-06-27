@@ -33,7 +33,6 @@ import (
 
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
-	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 )
 
 const (
@@ -86,12 +85,12 @@ func (vm *doVolumeMounter) CanMount() error {
 }
 
 // SetUp attaches the disk and bind mounts to the volume path
-func (vm *doVolumeMounter) SetUp(fsGroup *types.UnixGroupID) error {
+func (vm *doVolumeMounter) SetUp(fsGroup *int64) error {
 	return vm.SetUpAt(vm.GetPath(), fsGroup)
 }
 
 // SetUpAt attaches the disk and bind mounts to the volume path.
-func (vm *doVolumeMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error {
+func (vm *doVolumeMounter) SetUpAt(dir string, fsGroup *int64) error {
 	// TODO: handle failed mounts here.
 	notMnt, err := vm.mounter.IsLikelyNotMountPoint(dir)
 	glog.V(4).Infof("Digital Ocean volume set up: %s %v %v", dir, !notMnt, err)
@@ -196,10 +195,10 @@ var _ volume.Provisioner = &doVolumeProvisioner{}
 
 // Provision creates the resource at Digital Ocean and waits for it to be available
 func (vp *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
-	if !volume.AccessModesContainedInAll(vp.plugin.GetAccessModes(), vp.options.PVC.Spec.AccessModes) {
-		return nil, fmt.Errorf("invalid AccessModes %v: only AccessModes %v are supported",
-			vp.options.PVC.Spec.AccessModes, vp.plugin.GetAccessModes())
-	}
+	// if !volume.AccessModesContainedInAll(vp.plugin.GetAccessModes(), vp.options.PVC.Spec.AccessModes) {
+	// 	return nil, fmt.Errorf("invalid AccessModes %v: only AccessModes %v are supported",
+	// 		vp.options.PVC.Spec.AccessModes, vp.plugin.GetAccessModes())
+	// }
 
 	name := strings.ToLower(volume.GenerateVolumeName(vp.options.ClusterName, vp.options.PVName, volumeNameMaxLength))
 	description := fmt.Sprintf("kubernetes volume for cluster %s", vp.options.ClusterName)
@@ -217,7 +216,7 @@ func (vp *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 			Name:   vp.options.PVName,
 			Labels: map[string]string{},
 			Annotations: map[string]string{
-				volumehelper.VolumeDynamicallyCreatedByKey: "do-volume-dynamic-provisioner",
+				"kubernetes.io/createdby": "do-dynamic-provisioner",
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
