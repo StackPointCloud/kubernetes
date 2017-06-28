@@ -33,7 +33,6 @@ const (
 	secretName         = "digitalocean"
 	secretToken        = "token"
 	secretRegion       = "region"
-	labelDropletName   = "stackpoint.io/instance_id"
 )
 
 // ProbeVolumePlugins is the primary entrypoint for volume plugins.
