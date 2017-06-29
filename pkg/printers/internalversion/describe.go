@@ -632,7 +632,10 @@ func describeVolumes(volumes []api.Volume, w *PrefixWriter, space string) {
 			printPortworxVolumeSource(volume.VolumeSource.PortworxVolume, w)
 		case volume.VolumeSource.ScaleIO != nil:
 			printScaleIOVolumeSource(volume.VolumeSource.ScaleIO, w)
+		case volume.VolumeSource.DOVolume != nil:
+			printDOVolumeSource(volume.VolumeSource.DOVolume, w)
 		default:
+
 			w.Write(LEVEL_1, "<unknown>\n")
 		}
 	}
@@ -807,6 +810,14 @@ func printScaleIOVolumeSource(sio *api.ScaleIOVolumeSource, w *PrefixWriter) {
 		sio.Gateway, sio.System, sio.ProtectionDomain, sio.StoragePool, sio.StorageMode, sio.VolumeName, sio.FSType, sio.ReadOnly)
 }
 
+func printDOVolumeSource(dov *api.DOVolumeSource, w *PrefixWriter) {
+	w.Write(LEVEL_2, "Type:\tDOVolume (a Digital Ocean mount on the host that shares a pod's lifetime)\n"+
+		"    VolumeID:\t%v\n"+
+		"    FSType:\t%v\n"+
+		"    ReadOnly:\t%v\n",
+		dov.VolumeID, dov.FSType, dov.ReadOnly)
+}
+
 type PersistentVolumeDescriber struct {
 	clientset.Interface
 }
@@ -873,6 +884,8 @@ func (d *PersistentVolumeDescriber) Describe(namespace, name string, describerSe
 			printPortworxVolumeSource(pv.Spec.PortworxVolume, w)
 		case pv.Spec.ScaleIO != nil:
 			printScaleIOVolumeSource(pv.Spec.ScaleIO, w)
+		case pv.Spec.DOVolume != nil:
+			printDOVolumeSource(pv.Spec.DOVolume, w)
 		}
 
 		if events != nil {

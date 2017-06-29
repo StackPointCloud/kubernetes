@@ -726,6 +726,7 @@ func postProcessOpenAPISpecForBackwardCompatibility(s *spec.Swagger) (*spec.Swag
 		"v1.EmptyDirVolumeSource":                     "k8s.io/kubernetes/pkg/api/v1.EmptyDirVolumeSource",
 		"v1beta1.FSGroupStrategyOptions":              "k8s.io/kubernetes/pkg/apis/extensions/v1beta1.FSGroupStrategyOptions",
 		"v1.Status":                                   "k8s.io/apimachinery/pkg/apis/meta/v1.Status",
+		"v1.DOVolumeSource":                           "k8s.io/kubernetes/pkg/api/v1.DOVolumeSource",
 	}
 
 	for k, v := range compatibilityMap {

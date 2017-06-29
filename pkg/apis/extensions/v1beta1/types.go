@@ -926,6 +926,7 @@ var (
 	ConfigMap             FSType = "configMap"
 	Quobyte               FSType = "quobyte"
 	AzureDisk             FSType = "azureDisk"
+	DOVolume              FSType = "doVolume"
 	All                   FSType = "*"
 )
 
