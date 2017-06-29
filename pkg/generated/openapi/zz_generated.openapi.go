@@ -2940,6 +2940,38 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 			Dependencies: []string{
 				"k8s.io/kubernetes/pkg/api/v1.ContainerState"},
 		},
+		"k8s.io/kubernetes/pkg/api/v1.DOVolumeSource": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "DOVolumeSource represents a Volume resource in Digital Ocean.",
+					Properties: map[string]spec.Schema{
+						"volumeID": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Unique ID for the volume resource at Digital Ocean.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"fsType": {
+							SchemaProps: spec.SchemaProps{
+								Description: "FSType represents the filesystem type to mount Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"readOnly": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.",
+								Type:        []string{"boolean"},
+								Format:      "",
+							},
+						},
+					},
+					Required: []string{"volumeID"},
+				},
+			},
+			Dependencies: []string{},
+		},
 		"k8s.io/kubernetes/pkg/api/v1.DaemonEndpoint": {
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
@@ -5598,11 +5630,17 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource"),
 							},
 						},
+						"doVolume": {
+							SchemaProps: spec.SchemaProps{
+								Description: "DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.",
+								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.DOVolumeSource"),
+							},
+						},
 					},
 				},
 			},
 			Dependencies: []string{
-				"k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
+				"k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
 		},
 		"k8s.io/kubernetes/pkg/api/v1.PersistentVolumeSpec": {
 			Schema: spec.Schema{
@@ -5736,6 +5774,12 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource"),
 							},
 						},
+						"doVolume": {
+							SchemaProps: spec.SchemaProps{
+								Description: "DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.",
+								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.DOVolumeSource"),
+							},
+						},
 						"accessModes": {
 							SchemaProps: spec.SchemaProps{
 								Description: "AccessModes contains all ways the volume can be mounted. More info: http://kubernetes.io/docs/user-guide/persistent-volumes#access-modes",
@@ -5774,7 +5818,7 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 				},
 			},
 			Dependencies: []string{
-				"k8s.io/apimachinery/pkg/api/resource.Quantity", "k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ObjectReference", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
+				"k8s.io/apimachinery/pkg/api/resource.Quantity", "k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ObjectReference", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
 		},
 		"k8s.io/kubernetes/pkg/api/v1.PersistentVolumeStatus": {
 			Schema: spec.Schema{
@@ -8853,12 +8897,18 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource"),
 							},
 						},
+						"doVolume": {
+							SchemaProps: spec.SchemaProps{
+								Description: "DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.",
+								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.DOVolumeSource"),
+							},
+						},
 					},
 					Required: []string{"name"},
 				},
 			},
 			Dependencies: []string{
-				"k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ConfigMapVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DownwardAPIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.EmptyDirVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GitRepoVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PersistentVolumeClaimVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ProjectedVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.SecretVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
+				"k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ConfigMapVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DownwardAPIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.EmptyDirVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GitRepoVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PersistentVolumeClaimVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ProjectedVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.SecretVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
 		},
 		"k8s.io/kubernetes/pkg/api/v1.VolumeMount": {
 			Schema: spec.Schema{
@@ -9089,11 +9139,17 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource"),
 							},
 						},
+						"doVolume": {
+							SchemaProps: spec.SchemaProps{
+								Description: "DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.",
+								Ref:         ref("k8s.io/kubernetes/pkg/api/v1.DOVolumeSource"),
+							},
+						},
 					},
 				},
 			},
 			Dependencies: []string{
-				"k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ConfigMapVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DownwardAPIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.EmptyDirVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GitRepoVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PersistentVolumeClaimVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ProjectedVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.SecretVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
+				"k8s.io/kubernetes/pkg/api/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.AzureFileVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CephFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.CinderVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ConfigMapVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.DownwardAPIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.EmptyDirVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FCVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlexVolumeSource", "k8s.io/kubernetes/pkg/api/v1.FlockerVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GCEPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GitRepoVolumeSource", "k8s.io/kubernetes/pkg/api/v1.GlusterfsVolumeSource", "k8s.io/kubernetes/pkg/api/v1.HostPathVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ISCSIVolumeSource", "k8s.io/kubernetes/pkg/api/v1.NFSVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PersistentVolumeClaimVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PhotonPersistentDiskVolumeSource", "k8s.io/kubernetes/pkg/api/v1.PortworxVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ProjectedVolumeSource", "k8s.io/kubernetes/pkg/api/v1.QuobyteVolumeSource", "k8s.io/kubernetes/pkg/api/v1.RBDVolumeSource", "k8s.io/kubernetes/pkg/api/v1.ScaleIOVolumeSource", "k8s.io/kubernetes/pkg/api/v1.SecretVolumeSource", "k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource"},
 		},
 		"k8s.io/kubernetes/pkg/api/v1.VsphereVirtualDiskVolumeSource": {
 			Schema: spec.Schema{

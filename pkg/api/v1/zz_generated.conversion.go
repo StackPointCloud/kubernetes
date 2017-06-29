@@ -91,6 +91,8 @@ func RegisterConversions(scheme *runtime.Scheme) error {
 		Convert_api_ContainerStateWaiting_To_v1_ContainerStateWaiting,
 		Convert_v1_ContainerStatus_To_api_ContainerStatus,
 		Convert_api_ContainerStatus_To_v1_ContainerStatus,
+		Convert_v1_DOVolumeSource_To_api_DOVolumeSource,
+		Convert_api_DOVolumeSource_To_v1_DOVolumeSource,
 		Convert_v1_DaemonEndpoint_To_api_DaemonEndpoint,
 		Convert_api_DaemonEndpoint_To_v1_DaemonEndpoint,
 		Convert_v1_DeleteOptions_To_api_DeleteOptions,
@@ -1058,6 +1060,28 @@ func autoConvert_api_ContainerStatus_To_v1_ContainerStatus(in *api.ContainerStat
 
 func Convert_api_ContainerStatus_To_v1_ContainerStatus(in *api.ContainerStatus, out *ContainerStatus, s conversion.Scope) error {
 	return autoConvert_api_ContainerStatus_To_v1_ContainerStatus(in, out, s)
+}
+
+func autoConvert_v1_DOVolumeSource_To_api_DOVolumeSource(in *DOVolumeSource, out *api.DOVolumeSource, s conversion.Scope) error {
+	out.VolumeID = in.VolumeID
+	out.FSType = in.FSType
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_v1_DOVolumeSource_To_api_DOVolumeSource(in *DOVolumeSource, out *api.DOVolumeSource, s conversion.Scope) error {
+	return autoConvert_v1_DOVolumeSource_To_api_DOVolumeSource(in, out, s)
+}
+
+func autoConvert_api_DOVolumeSource_To_v1_DOVolumeSource(in *api.DOVolumeSource, out *DOVolumeSource, s conversion.Scope) error {
+	out.VolumeID = in.VolumeID
+	out.FSType = in.FSType
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_api_DOVolumeSource_To_v1_DOVolumeSource(in *api.DOVolumeSource, out *DOVolumeSource, s conversion.Scope) error {
+	return autoConvert_api_DOVolumeSource_To_v1_DOVolumeSource(in, out, s)
 }
 
 func autoConvert_v1_DaemonEndpoint_To_api_DaemonEndpoint(in *DaemonEndpoint, out *api.DaemonEndpoint, s conversion.Scope) error {
@@ -2774,6 +2798,7 @@ func autoConvert_v1_PersistentVolumeSource_To_api_PersistentVolumeSource(in *Per
 	out.PhotonPersistentDisk = (*api.PhotonPersistentDiskVolumeSource)(unsafe.Pointer(in.PhotonPersistentDisk))
 	out.PortworxVolume = (*api.PortworxVolumeSource)(unsafe.Pointer(in.PortworxVolume))
 	out.ScaleIO = (*api.ScaleIOVolumeSource)(unsafe.Pointer(in.ScaleIO))
+	out.DOVolume = (*api.DOVolumeSource)(unsafe.Pointer(in.DOVolume))
 	return nil
 }
 
@@ -2801,6 +2826,7 @@ func autoConvert_api_PersistentVolumeSource_To_v1_PersistentVolumeSource(in *api
 	out.PhotonPersistentDisk = (*PhotonPersistentDiskVolumeSource)(unsafe.Pointer(in.PhotonPersistentDisk))
 	out.PortworxVolume = (*PortworxVolumeSource)(unsafe.Pointer(in.PortworxVolume))
 	out.ScaleIO = (*ScaleIOVolumeSource)(unsafe.Pointer(in.ScaleIO))
+	out.DOVolume = (*DOVolumeSource)(unsafe.Pointer(in.DOVolume))
 	return nil
 }
 
@@ -4616,6 +4642,7 @@ func autoConvert_v1_VolumeSource_To_api_VolumeSource(in *VolumeSource, out *api.
 	out.Projected = (*api.ProjectedVolumeSource)(unsafe.Pointer(in.Projected))
 	out.PortworxVolume = (*api.PortworxVolumeSource)(unsafe.Pointer(in.PortworxVolume))
 	out.ScaleIO = (*api.ScaleIOVolumeSource)(unsafe.Pointer(in.ScaleIO))
+	out.DOVolume = (*api.DOVolumeSource)(unsafe.Pointer(in.DOVolume))
 	return nil
 }
 
@@ -4650,6 +4677,7 @@ func autoConvert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *
 	out.Projected = (*ProjectedVolumeSource)(unsafe.Pointer(in.Projected))
 	out.PortworxVolume = (*PortworxVolumeSource)(unsafe.Pointer(in.PortworxVolume))
 	out.ScaleIO = (*ScaleIOVolumeSource)(unsafe.Pointer(in.ScaleIO))
+	out.DOVolume = (*DOVolumeSource)(unsafe.Pointer(in.DOVolume))
 	return nil
 }
 
