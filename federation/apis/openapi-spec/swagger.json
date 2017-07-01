@@ -2,7 +2,7 @@
   "swagger": "2.0",
   "info": {
    "title": "Generic API Server",
-   "version": "v1.6.6"
+   "version": "v1.6.0"
   },
   "paths": {
    "/api/": {
@@ -9672,6 +9672,26 @@
      }
     }
    },
+   "io.k8s.kubernetes.pkg.api.v1.DOVolumeSource": {
+    "description": "DOVolumeSource represents a Volume resource in Digital Ocean.",
+    "required": [
+     "volumeID"
+    ],
+    "properties": {
+     "fsType": {
+      "description": "FSType represents the filesystem type to mount Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+      "type": "string"
+     },
+     "readOnly": {
+      "description": "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.",
+      "type": "boolean"
+     },
+     "volumeID": {
+      "description": "Unique ID for the volume resource at Digital Ocean.",
+      "type": "string"
+     }
+    }
+   },
    "io.k8s.kubernetes.pkg.api.v1.DownwardAPIProjection": {
     "description": "Represents downward API info for projecting into a projected volume. Note that this is identical to a downwardAPI volume source without the default mode.",
     "properties": {
@@ -11418,6 +11438,10 @@
       "description": "ConfigMap represents a configMap that should populate this volume",
       "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.ConfigMapVolumeSource"
      },
+     "doVolume": {
+      "description": "DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.",
+      "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.DOVolumeSource"
+     },
      "downwardAPI": {
       "description": "DownwardAPI represents downward API about the pod that should populate this volume",
       "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.DownwardAPIVolumeSource"
@@ -12492,6 +12516,10 @@
    "v1.ContainerPort": {
     "description": "Deprecated. Please use io.k8s.kubernetes.pkg.api.v1.ContainerPort instead.",
     "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.ContainerPort"
+   },
+   "v1.DOVolumeSource": {
+    "description": "Deprecated. Please use io.k8s.kubernetes.pkg.api.v1.DOVolumeSource instead.",
+    "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.DOVolumeSource"
    },
    "v1.DeleteOptions": {
     "description": "Deprecated. Please use io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions instead.",

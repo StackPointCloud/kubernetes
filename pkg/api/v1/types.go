@@ -336,7 +336,7 @@ type VolumeSource struct {
 	ScaleIO *ScaleIOVolumeSource `json:"scaleIO,omitempty" protobuf:"bytes,25,opt,name=scaleIO"`
 	// DOVolume represents a Digital Ocean volume attached and mounted on Kubernetes nodes.
 	// +optional
-	DOVolume *DOVolumeSource `json:"doVolume,omitempty" protobuf:"bytes,27,opt,name=doVolume"`	
+	DOVolume *DOVolumeSource `json:"doVolume,omitempty" protobuf:"bytes,27,opt,name=doVolume"`
 }
 
 // PersistentVolumeClaimVolumeSource references the user's PVC in the same namespace.
