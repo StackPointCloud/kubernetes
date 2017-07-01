@@ -16326,3 +16326,132 @@ filegroup(
     srcs = [":package-srcs"],
     tags = ["automanaged"],
 )
+
+go_test(
+    name = "github.com/digitalocean/godo_test",
+    srcs = [
+        "github.com/digitalocean/godo/account_test.go",
+        "github.com/digitalocean/godo/action_test.go",
+        "github.com/digitalocean/godo/certificates_test.go",
+        "github.com/digitalocean/godo/domains_test.go",
+        "github.com/digitalocean/godo/droplet_actions_test.go",
+        "github.com/digitalocean/godo/droplets_test.go",
+        "github.com/digitalocean/godo/errors_test.go",
+        "github.com/digitalocean/godo/firewalls_test.go",
+        "github.com/digitalocean/godo/floating_ips_actions_test.go",
+        "github.com/digitalocean/godo/floating_ips_test.go",
+        "github.com/digitalocean/godo/godo_test.go",
+        "github.com/digitalocean/godo/image_actions_test.go",
+        "github.com/digitalocean/godo/images_test.go",
+        "github.com/digitalocean/godo/keys_test.go",
+        "github.com/digitalocean/godo/links_test.go",
+        "github.com/digitalocean/godo/load_balancers_test.go",
+        "github.com/digitalocean/godo/regions_test.go",
+        "github.com/digitalocean/godo/sizes_test.go",
+        "github.com/digitalocean/godo/snapshots_test.go",
+        "github.com/digitalocean/godo/storage_actions_test.go",
+        "github.com/digitalocean/godo/storage_test.go",
+        "github.com/digitalocean/godo/tags_test.go",
+        "github.com/digitalocean/godo/timestamp_test.go",
+    ],
+    library = ":github.com/digitalocean/godo",
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/digitalocean/godo/context",
+        "//vendor:github.com/stretchr/testify/assert",
+    ],
+)
+
+go_library(
+    name = "github.com/digitalocean/godo",
+    srcs = [
+        "github.com/digitalocean/godo/account.go",
+        "github.com/digitalocean/godo/action.go",
+        "github.com/digitalocean/godo/certificates.go",
+        "github.com/digitalocean/godo/doc.go",
+        "github.com/digitalocean/godo/domains.go",
+        "github.com/digitalocean/godo/droplet_actions.go",
+        "github.com/digitalocean/godo/droplets.go",
+        "github.com/digitalocean/godo/errors.go",
+        "github.com/digitalocean/godo/firewalls.go",
+        "github.com/digitalocean/godo/floating_ips.go",
+        "github.com/digitalocean/godo/floating_ips_actions.go",
+        "github.com/digitalocean/godo/godo.go",
+        "github.com/digitalocean/godo/image_actions.go",
+        "github.com/digitalocean/godo/images.go",
+        "github.com/digitalocean/godo/keys.go",
+        "github.com/digitalocean/godo/links.go",
+        "github.com/digitalocean/godo/load_balancers.go",
+        "github.com/digitalocean/godo/regions.go",
+        "github.com/digitalocean/godo/sizes.go",
+        "github.com/digitalocean/godo/snapshots.go",
+        "github.com/digitalocean/godo/storage.go",
+        "github.com/digitalocean/godo/storage_actions.go",
+        "github.com/digitalocean/godo/strings.go",
+        "github.com/digitalocean/godo/tags.go",
+        "github.com/digitalocean/godo/timestamp.go",
+    ],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/digitalocean/godo/context",
+        "//vendor:github.com/google/go-querystring/query",
+        "//vendor:github.com/tent/http-link-go",
+    ],
+)
+
+go_library(
+    name = "github.com/digitalocean/godo/context",
+    srcs = [
+        "github.com/digitalocean/godo/context/context.go",
+        "github.com/digitalocean/godo/context/context_go17.go",
+    ],
+    tags = ["automanaged"],
+)
+
+go_test(
+    name = "github.com/digitalocean/godo/util_test",
+    srcs = ["github.com/digitalocean/godo/util/droplet_test.go"],
+    library = ":github.com/digitalocean/godo/util",
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/digitalocean/godo",
+        "//vendor:github.com/digitalocean/godo/context",
+        "//vendor:golang.org/x/oauth2",
+    ],
+)
+
+go_library(
+    name = "github.com/digitalocean/godo/util",
+    srcs = ["github.com/digitalocean/godo/util/droplet.go"],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/digitalocean/godo",
+        "//vendor:github.com/digitalocean/godo/context",
+    ],
+)
+
+go_test(
+    name = "github.com/google/go-querystring/query_test",
+    srcs = ["github.com/google/go-querystring/query/encode_test.go"],
+    library = ":github.com/google/go-querystring/query",
+    tags = ["automanaged"],
+)
+
+go_library(
+    name = "github.com/google/go-querystring/query",
+    srcs = ["github.com/google/go-querystring/query/encode.go"],
+    tags = ["automanaged"],
+)
+
+go_test(
+    name = "github.com/tent/http-link-go_test",
+    srcs = ["github.com/tent/http-link-go/link_test.go"],
+    library = ":github.com/tent/http-link-go",
+    tags = ["automanaged"],
+)
+
+go_library(
+    name = "github.com/tent/http-link-go",
+    srcs = ["github.com/tent/http-link-go/link.go"],
+    tags = ["automanaged"],
+)
