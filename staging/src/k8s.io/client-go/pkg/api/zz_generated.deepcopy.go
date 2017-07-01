@@ -66,6 +66,7 @@ func RegisterDeepCopies(scheme *runtime.Scheme) error {
 		conversion.GeneratedDeepCopyFunc{Fn: DeepCopy_api_ContainerStateWaiting, InType: reflect.TypeOf(&ContainerStateWaiting{})},
 		conversion.GeneratedDeepCopyFunc{Fn: DeepCopy_api_ContainerStatus, InType: reflect.TypeOf(&ContainerStatus{})},
 		conversion.GeneratedDeepCopyFunc{Fn: DeepCopy_api_ConversionError, InType: reflect.TypeOf(&ConversionError{})},
+		conversion.GeneratedDeepCopyFunc{Fn: DeepCopy_api_DOVolumeSource, InType: reflect.TypeOf(&DOVolumeSource{})},
 		conversion.GeneratedDeepCopyFunc{Fn: DeepCopy_api_DaemonEndpoint, InType: reflect.TypeOf(&DaemonEndpoint{})},
 		conversion.GeneratedDeepCopyFunc{Fn: DeepCopy_api_DeleteOptions, InType: reflect.TypeOf(&DeleteOptions{})},
 		conversion.GeneratedDeepCopyFunc{Fn: DeepCopy_api_DownwardAPIProjection, InType: reflect.TypeOf(&DownwardAPIProjection{})},
@@ -728,6 +729,15 @@ func DeepCopy_api_ConversionError(in interface{}, out interface{}, c *conversion
 				out.Out = *newVal.(*interface{})
 			}
 		}
+		return nil
+	}
+}
+
+func DeepCopy_api_DOVolumeSource(in interface{}, out interface{}, c *conversion.Cloner) error {
+	{
+		in := in.(*DOVolumeSource)
+		out := out.(*DOVolumeSource)
+		*out = *in
 		return nil
 	}
 }
@@ -2077,6 +2087,11 @@ func DeepCopy_api_PersistentVolumeSource(in interface{}, out interface{}, c *con
 			if err := DeepCopy_api_ScaleIOVolumeSource(*in, *out, c); err != nil {
 				return err
 			}
+		}
+		if in.DOVolume != nil {
+			in, out := &in.DOVolume, &out.DOVolume
+			*out = new(DOVolumeSource)
+			**out = **in
 		}
 		return nil
 	}
@@ -3500,6 +3515,11 @@ func DeepCopy_api_VolumeSource(in interface{}, out interface{}, c *conversion.Cl
 			if err := DeepCopy_api_ScaleIOVolumeSource(*in, *out, c); err != nil {
 				return err
 			}
+		}
+		if in.DOVolume != nil {
+			in, out := &in.DOVolume, &out.DOVolume
+			*out = new(DOVolumeSource)
+			**out = **in
 		}
 		return nil
 	}
