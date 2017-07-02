@@ -1262,7 +1262,7 @@ func ValidatePersistentVolume(pv *api.PersistentVolume) field.ErrorList {
 			allErrs = append(allErrs, field.Forbidden(specPath.Child("doVolume"), "may not specify more than 1 volume type"))
 		} else {
 			numVolumes++
-			allErrs = append(allErrs, validateScaleIOVolumeSource(pv.Spec.ScaleIO, specPath.Child("doVolume"))...)
+			allErrs = append(allErrs, validateDOVolumeSource(pv.Spec.DOVolume, specPath.Child("doVolume"))...)
 		}
 	}
 
