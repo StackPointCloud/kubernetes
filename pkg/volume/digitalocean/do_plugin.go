@@ -73,7 +73,7 @@ func (plugin *doVolumePlugin) GetVolumeName(spec *volume.Spec) (string, error) {
 // CanSupport returns a boolean that indicates if the volume is supported
 func (plugin *doVolumePlugin) CanSupport(spec *volume.Spec) bool {
 	return (spec.PersistentVolume != nil && spec.PersistentVolume.Spec.DOVolume != nil) ||
-		(spec.PersistentVolume != nil && spec.Volume.DOVolume != nil)
+		(spec.Volume != nil && spec.Volume.DOVolume != nil)
 }
 
 // RequiresRemount returns false if this plugin desn't need re-mount
