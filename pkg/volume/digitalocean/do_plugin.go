@@ -17,6 +17,7 @@ limitations under the License.
 package digitalocean
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -256,8 +257,8 @@ func (plugin *doVolumePlugin) getDOToken() (*doManagerConfig, error) {
 	}
 
 	return &doManagerConfig{
-		token:  token,
-		region: region,
+		token:  base64.StdEncoding.EncodeToString([]byte(token)),
+		region: base64.StdEncoding.EncodeToString([]byte(region)),
 	}, nil
 }
 

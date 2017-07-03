@@ -109,6 +109,9 @@ func (m *doManager) GetAccount() (*godo.Account, error) {
 	account, _, err := m.client.Account.Get(m.context)
 	if err != nil {
 		m.removeDOClient()
+		glog.Errorf("FAILED DEBUG GetAccount with Digital Ocean token %s", m.config.token)
+		glog.Errorf("FAILED DEBUG GetAccount with Digital Ocean region %s", m.config.region)
+
 		return nil, err
 	}
 
