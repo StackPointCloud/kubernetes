@@ -140,7 +140,7 @@ func (va *doVolumeAttacher) WaitForAttach(spec *volume.Spec, devicePath string, 
 	for {
 		select {
 		case <-ticker.C:
-			glog.V(5).Infof("Checking if Digital Ocean Volume %q is attached.", volumeSource.VolumeID)
+			glog.V(5).Infof("Checking if Digital Ocean Volume %q is attached at %s", volumeSource.VolumeID, devicePath)
 
 			if pathExists, err := volumeutil.PathExists(devicePath); err != nil {
 				return "", fmt.Errorf("Error checking if path exists: %v", err)
