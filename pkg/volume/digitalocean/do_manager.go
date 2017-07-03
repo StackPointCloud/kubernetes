@@ -222,7 +222,7 @@ func (m *doManager) AttachDisk(volumeID string, dropletID int) (string, error) {
 			return "", err
 		}
 	}
-	return "/dev/disk/by-id/scsi-0DO" + vol.Name, nil
+	return "/dev/disk/by-id/scsi-0DO_Volume_" + vol.Name, nil
 }
 
 // DetachDisk detaches a disk to given droplet
