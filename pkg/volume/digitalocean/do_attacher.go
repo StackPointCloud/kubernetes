@@ -209,9 +209,9 @@ type doVolumeDetacher struct {
 var _ volume.Detacher = &doVolumeDetacher{}
 
 // Detach the given device from the node with the given Name.
-func (vd *doVolumeDetacher) Detach(volumeName string, nodeName types.NodeName) error {
+func (vd *doVolumeDetacher) Detach(volumeID string, nodeName types.NodeName) error {
 
-	if volumeName == "" {
+	if volumeID == "" {
 		return fmt.Errorf("Cannot detach empty volume name")
 	}
 
@@ -227,9 +227,9 @@ func (vd *doVolumeDetacher) Detach(volumeName string, nodeName types.NodeName) e
 		return err
 	}
 
-	glog.V(4).Infof("detaching %v from node %q", volumeName, nodeName)
-	if err = vd.manager.DetachVolumeByName(volumeName, droplet.ID); err != nil {
-		glog.Errorf("failed to detach azure disk %q, err %v", volumeName, err)
+	glog.V(4).Infof("detaching %q from node %q", volumeID, nodeName)
+	if err = vd.manager.DetachVolume(volumeID, droplet.ID); err != nil {
+		glog.Errorf("failed to detach Digital Ocean disk %q, err %v", volumeID, err)
 	}
 
 	return nil
