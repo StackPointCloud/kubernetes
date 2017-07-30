@@ -429,6 +429,7 @@ func postProcessOpenAPISpecForBackwardCompatibility(s *spec.Swagger) (*spec.Swag
 		"v1beta1.DaemonSetList":                "io.k8s.kubernetes.pkg.apis.extensions.v1beta1.DaemonSetList",
 		"v1.RBDVolumeSource":                   "io.k8s.kubernetes.pkg.api.v1.RBDVolumeSource",
 		"v1.NFSVolumeSource":                   "io.k8s.kubernetes.pkg.api.v1.NFSVolumeSource",
+		"v1.DOVolumeSource":                    "io.k8s.kubernetes.pkg.api.v1.DOVolumeSource",
 		"v1.NodeSelectorRequirement":           "io.k8s.kubernetes.pkg.api.v1.NodeSelectorRequirement",
 		"v1.ResourceRequirements":              "io.k8s.kubernetes.pkg.api.v1.ResourceRequirements",
 		"v1.WatchEvent":                        "io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent",
