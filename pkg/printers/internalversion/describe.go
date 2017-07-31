@@ -758,6 +758,8 @@ func describeVolumes(volumes []api.Volume, w PrefixWriter, space string) {
 			printFlexVolumeSource(volume.VolumeSource.FlexVolume, w)
 		case volume.VolumeSource.Flocker != nil:
 			printFlockerVolumeSource(volume.VolumeSource.Flocker, w)
+		case volume.VolumeSource.DOVolume != nil:
+			printDOVolumeSource(volume.VolumeSource.DOVolume, w)
 		default:
 			w.Write(LEVEL_1, "<unknown>\n")
 		}
@@ -1012,6 +1014,14 @@ func printFlockerVolumeSource(flocker *api.FlockerVolumeSource, w PrefixWriter) 
 		flocker.DatasetName, flocker.DatasetUUID)
 }
 
+func printDOVolumeSource(dovolume *api.DOVolumeSource, w PrefixWriter) {
+	w.Write(LEVEL_2, "Type:\tDOVolume (a Digital Ocean on the host that shares a pod's lifetime)\n"+
+		"    VolumeID:\t%v\n"+
+		"    FSType:\t%v\n"+
+		"    ReadOnly:\t%v\n",
+		dovolume.VolumeID, dovolume.FSType, dovolume.ReadOnly)
+}
+
 type PersistentVolumeDescriber struct {
 	clientset.Interface
 }
@@ -1095,6 +1105,8 @@ func describePersistentVolume(pv *api.PersistentVolume, events *api.EventList) (
 			printFlexVolumeSource(pv.Spec.FlexVolume, w)
 		case pv.Spec.Flocker != nil:
 			printFlockerVolumeSource(pv.Spec.Flocker, w)
+		case pv.Spec.DOVolume != nil:
+			printDOVolumeSource(pv.Spec.DOVolume, w)
 		default:
 			w.Write(LEVEL_1, "<unknown>\n")
 		}
