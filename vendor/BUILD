@@ -125,6 +125,7 @@ filegroup(
         "//vendor/github.com/davecgh/go-spew/spew:all-srcs",
         "//vendor/github.com/daviddengcn/go-colortext:all-srcs",
         "//vendor/github.com/dgrijalva/jwt-go:all-srcs",
+        "//vendor/github.com/digitalocean/godo:all-srcs",
         "//vendor/github.com/docker/distribution/digest:all-srcs",
         "//vendor/github.com/docker/distribution/reference:all-srcs",
         "//vendor/github.com/docker/docker/api/types:all-srcs",
