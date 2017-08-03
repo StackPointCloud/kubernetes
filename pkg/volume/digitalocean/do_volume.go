@@ -220,7 +220,7 @@ func (vp *doVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 			Name:   vp.options.PVName,
 			Labels: map[string]string{},
 			Annotations: map[string]string{
-				"kubernetes.io/createdby": "do-dynamic-provisioner",
+				"kubernetes.io/createdby": "digitalocean-dynamic-provisioner",
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
