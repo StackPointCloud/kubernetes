@@ -5,42 +5,6 @@ licenses(["notice"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
-    "go_test",
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = [
-        "account_test.go",
-        "action_test.go",
-        "certificates_test.go",
-        "domains_test.go",
-        "droplet_actions_test.go",
-        "droplets_test.go",
-        "errors_test.go",
-        "firewalls_test.go",
-        "floating_ips_actions_test.go",
-        "floating_ips_test.go",
-        "godo_test.go",
-        "image_actions_test.go",
-        "images_test.go",
-        "keys_test.go",
-        "links_test.go",
-        "load_balancers_test.go",
-        "regions_test.go",
-        "sizes_test.go",
-        "snapshots_test.go",
-        "storage_actions_test.go",
-        "storage_test.go",
-        "tags_test.go",
-        "timestamp_test.go",
-    ],
-    library = ":go_default_library",
-    tags = ["automanaged"],
-    deps = [
-        "//vendor/github.com/digitalocean/godo/context:go_default_library",
-        "//vendor/github.com/stretchr/testify/assert:go_default_library",
-    ],
 )
 
 go_library(
